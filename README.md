@@ -20,3 +20,7 @@ jobs:
 | `dependabot-auto-merge.yml` | auto-merge Dependabot PRs (protected & unprotected branch handling) |
 
 Mill-domain checks (e.g. `check_kind_literals`) live in robotsix-mill's own CI, not here.
+
+## Standards
+
+This repo follows the [robotsix stack standards](https://github.com/damien-robotsix/robotsix-standards).
