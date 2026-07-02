@@ -17,5 +17,6 @@ jobs:
 | `python-release.yml` | release-please / version bump |
 | `docker-release.yml` | build + push container image |
 | `deps-bump.yml` | scheduled `uv lock --upgrade` PR |
+| `dependabot-auto-merge.yml` | auto-merge Dependabot PRs (protected & unprotected branch handling) |
 
 Mill-domain checks (e.g. `check_kind_literals`) live in robotsix-mill's own CI, not here.

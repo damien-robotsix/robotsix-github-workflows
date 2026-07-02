@@ -1,0 +1,48 @@
+name: Dependabot Auto-Merge
+
+on:
+  workflow_call:
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+
+      - name: Fetch dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@21025c705c08248db411dc16f3619e6b5f9ea21a  # v2
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Auto-merge dependabot PR
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
+        run: |
+          echo "Dependabot update-type: $UPDATE_TYPE"
+
+          set +e
+          output=$(gh pr merge --auto --squash --delete-branch "$PR_URL" 2>&1)
+          rc=$?
+          set -e
+
+          if [ "$rc" -eq 0 ]; then
+            echo "Auto-merge queued (protected repo — will merge when checks pass)"
+          elif echo "$output" | grep -qi "protected branch rules not configured"; then
+            echo "No branch-protection rules detected — polling checks then merging directly"
+            gh pr checks "$PR_URL" --watch --fail-fast
+            gh pr merge --squash --delete-branch "$PR_URL"
+          else
+            printf '%s\n' "$output" >&2
+            exit "$rc"
+          fi
