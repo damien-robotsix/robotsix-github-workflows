@@ -12,10 +12,11 @@ on:
         description: >
           Image name published to the GitHub Container Registry, e.g.
           `ghcr.io/<owner>/<repo>` or `ghcr.io/<owner>/<repo>-sandbox`.
-          Defaults to `ghcr.io/${{ github.repository }}`.
+          When empty (the default), publishes to `ghcr.io/<owner>/<repo>`
+          for the calling repository.
         required: false
         type: string
-        default: ghcr.io/${{ github.repository }}
+        default: ""
 
 permissions:
   contents: read
@@ -43,7 +44,7 @@ jobs:
       - id: meta
         uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9  # v6
         with:
-          images: ${{ inputs.image-name }}
+          images: ${{ inputs.image-name != '' && inputs.image-name || format('ghcr.io/{0}', github.repository) }}
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
