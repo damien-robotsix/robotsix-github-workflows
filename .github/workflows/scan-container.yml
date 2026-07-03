@@ -1,0 +1,68 @@
+name: Container Rescan
+
+on:
+  workflow_call:
+    inputs:
+      image-name:
+        description: >
+          Full image ref to scan, e.g. `ghcr.io/<owner>/<repo>:main`.
+          When empty (the default), falls back to
+          `ghcr.io/$GITHUB_REPOSITORY:main` for the calling repository.
+        required: false
+        type: string
+        default: ""
+      ignore-unfixed:
+        description: Skip CVEs with no upstream fix. Defaults to false for
+          scheduled rescans so all findings surface in the Security tab for
+          trend tracking.
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  security-events: write  # SARIF upload to Code Scanning
+
+jobs:
+  rescan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+        # Checkout required for github/codeql-action/upload-sarif to
+        # resolve the repo's Code Scanning endpoint.
+
+      - name: Resolve image ref
+        id: image-ref
+        env:
+          INPUT_IMAGE_NAME: ${{ inputs.image-name }}
+        run: |
+          BASE="${INPUT_IMAGE_NAME:-ghcr.io/$GITHUB_REPOSITORY}"
+          echo "image=${BASE}:main" >> "$GITHUB_OUTPUT"
+        # When image-name is empty, falls back to
+        # ghcr.io/<owner>/<repo>:main — the workflow_call input default
+        # cannot use ${{ }} expressions (GitHub rejects them as invalid
+        # workflow file), so the dynamic default is computed here via
+        # env: instead.
+
+      # No gate step here — this workflow is report-only.  The two-step
+      # gate+SARIF split used in docker-pr-scan.yml is not needed when
+      # there is no exit-code gate.
+      #
+      # No severity filter: scheduled rescans surface all findings
+      # (including MEDIUM/LOW) for trend tracking in the Security tab.
+      - name: Trivy vulnerability scan (SARIF for code-scanning)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          image-ref: ${{ steps.image-ref.outputs.image }}
+          format: sarif
+          output: trivy-results.sarif
+          ignore-unfixed: ${{ inputs.ignore-unfixed }}
+
+      - name: Upload Trivy SARIF results
+        uses: github/codeql-action/upload-sarif@03e4368ac7daa2bd82b3e85262f3bf87ee112f57  # v3.36.0
+        if: ${{ always() && hashFiles('trivy-results.sarif') != '' }}
+        continue-on-error: true
+        with:
+          sarif_file: trivy-results.sarif
