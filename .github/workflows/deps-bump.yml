@@ -45,8 +45,12 @@ on:
           installation token, or a deploy key.
         required: true
 
+permissions:
+  contents: read
+
 jobs:
   bump:
+    name: Bump
     runs-on: ubuntu-latest
     permissions:
       contents: write       # push bump branch
