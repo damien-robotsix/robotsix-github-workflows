@@ -1,0 +1,88 @@
+name: Docker PR Scan
+
+on:
+  workflow_call:
+    inputs:
+      dockerfile:
+        description: Path to the Dockerfile, relative to the repository root.
+        required: false
+        type: string
+        default: "./Dockerfile"
+      image-name:
+        description: >
+          Base image name, e.g. `ghcr.io/<owner>/<repo>` or
+          `ghcr.io/<owner>/<repo>-sandbox`. When empty (the default),
+          falls back to `ghcr.io/<owner>/<repo>` for the calling repository.
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  security-events: write  # SARIF upload to Code Scanning
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4
+
+      - name: Resolve local image ref
+        id: image-ref
+        env:
+          INPUT_IMAGE_NAME: ${{ inputs.image-name }}
+        run: |
+          BASE="${INPUT_IMAGE_NAME:-ghcr.io/$GITHUB_REPOSITORY}"
+          echo "image=${BASE}:pr-scan" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7
+        with:
+          context: .
+          file: ${{ inputs.dockerfile }}
+          push: false
+          load: true
+          tags: ${{ steps.image-ref.outputs.image }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Gate: CRITICAL and HIGH fixable CVEs block the pipeline. Runs in
+      # table format so the failing CVE row is visible in the CI log
+      # (SARIF mode would silently swallow it — see below).
+      - name: Trivy vulnerability scan (gate)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          image-ref: ${{ steps.image-ref.outputs.image }}
+          format: table
+          exit-code: "1"
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      # Code-scanning surface: separate Trivy run that emits SARIF for
+      # all severities (no exit-code). The two steps MUST stay separate:
+      # the trivy-action's entrypoint unsets TRIVY_SEVERITY when
+      # format=sarif (unless limit-severities-for-sarif=true), so
+      # combining gate + SARIF into one step would silently scan for
+      # ALL severities and fail on HIGH/MEDIUM findings the gate is
+      # supposed to ignore. `if: always()` so we still surface findings
+      # in the Security tab even when the gate above trips.
+      - name: Trivy vulnerability scan (SARIF for code-scanning)
+        # Only scan when an image was actually built.
+        if: ${{ always() && steps.image-ref.outputs.image != '' }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          image-ref: ${{ steps.image-ref.outputs.image }}
+          format: sarif
+          output: trivy-results.sarif
+          # No exit-code — this step is observability-only.
+          ignore-unfixed: true
+
+      - name: Upload Trivy SARIF results
+        uses: github/codeql-action/upload-sarif@03e4368ac7daa2bd82b3e85262f3bf87ee112f57  # v3.36.0
+        if: ${{ always() && hashFiles('trivy-results.sarif') != '' }}
+        continue-on-error: true
+        with:
+          sarif_file: trivy-results.sarif
