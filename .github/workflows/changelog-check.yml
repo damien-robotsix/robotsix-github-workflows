@@ -1,0 +1,29 @@
+name: Changelog Check
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  changelog:
+    name: Changelog
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-changelog') }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+        with:
+          version: "0.8.15"
+
+      - name: Check changelog fragment
+        env:
+          GIT_BASE_REF: ${{ github.event.pull_request && format('origin/{0}', github.event.pull_request.base.ref) || 'origin/main' }}
+        run: uvx towncrier check --compare-with "${GIT_BASE_REF}"

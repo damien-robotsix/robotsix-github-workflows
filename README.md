@@ -21,6 +21,7 @@ jobs:
 | `deps-bump.yml` | scheduled `uv lock --upgrade` PR |
 | `dependabot-auto-merge.yml` | auto-merge Dependabot PRs (protected & unprotected branch handling) |
 | `baseline-check.yml` | enforce AGENT.md and .github/dependabot.yml baseline rules |
+| `changelog-check.yml` | towncrier fragment gate for pull requests (skip-changelog label exempt) |
 | `codeql.yml` | CodeQL static analysis |
 | `lint-workflows.yml` | actionlint + zizmor audit of workflow files, and SARIF-upload-permission validation |
 | `pin-bump.yml` | scheduled per-repo first-party git pin bump PR |
@@ -206,6 +207,31 @@ jobs:
 - `LICENSE` at the repo root using the MIT license.
 - `.github/dependabot.yml` covering at minimum `uv`, `github-actions`, and `pre-commit` ecosystems (plus `docker` when `has-docker: true` or a root `Dockerfile` exists, plus `npm` when `package.json` exists).
 - `changelog.d/` fragment directory and `[tool.towncrier]` section in `pyproject.toml` (only when `pyproject.toml` exists — skipped for non-Python repos).
+
+## `changelog-check.yml` — caller template
+
+Consumer repos add a wrapper workflow (e.g. `.github/workflows/changelog-check.yml`)
+that triggers on pull requests:
+
+```yaml
+name: Changelog Check
+
+on:
+  pull_request:
+
+jobs:
+  changelog:
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/changelog-check.yml@<sha>
+```
+
+The job is skipped when the pull request carries the `skip-changelog` label (e.g. for
+CI-only or chore PRs that don't need a changelog fragment).
+
+**Consumer prerequisites:**
+
+- A `[tool.towncrier]` config in `pyproject.toml` with a `changelog.d/` fragment directory.
+- The `skip-changelog` label must exist in the repository (the workflow skips on its
+  presence; missing labels are silently ignored).
 
 ## `codeql.yml` — caller template
 
