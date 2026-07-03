@@ -1,5 +1,6 @@
 ## 0.0.0 (unreleased)
 
+- Add `queries` and `config-file` inputs to the shared `codeql.yml` reusable workflow.  `queries` defaults to `security-and-quality`; `config-file` supports per-repo CodeQL configuration files (e.g. `.github/codeql/codeql-config.yml`).
 - Create minimal `.pre-commit-config.yaml` (empty `repos: []`) and restore the `pre-commit` ecosystem
   in Dependabot config — the repo had no `.pre-commit-config.yaml`, causing the weekly update job to
   fail with "dependency_file_not_found", but the baseline check requires the ecosystem entry.
