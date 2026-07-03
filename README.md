@@ -16,6 +16,7 @@ jobs:
 | `python-docs.yml` | mkdocs build/deploy |
 | `auto-release.yml` | scheduled towncrier-driven `0.x` tag-cutting release workflow |
 | `docker-release.yml` | build + push container image |
+| `docker-pr-scan.yml` | build (no push) + Trivy CRITICAL/HIGH scan for PRs |
 | `deps-bump.yml` | scheduled `uv lock --upgrade` PR |
 | `dependabot-auto-merge.yml` | auto-merge Dependabot PRs (protected & unprotected branch handling) |
 | `baseline-check.yml` | enforce AGENT.md and .github/dependabot.yml baseline rules |
@@ -84,6 +85,53 @@ jobs:
 
 - An existing `docker-release.yml` caller workflow that maps `v*` tags
   to `X.Y.Z` image tags via `type=semver,pattern={{version}}`.
+
+## `docker-pr-scan.yml` — caller template
+
+Consumer repos add a wrapper workflow (e.g. `.github/workflows/docker-pr-scan.yml`) that triggers on pull requests:
+
+```yaml
+name: Docker PR Scan
+
+on:
+  pull_request:
+
+jobs:
+  scan:
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/docker-pr-scan.yml@<sha>
+    # Optional overrides — omit if your Dockerfile is ./Dockerfile
+    # and your image name is ghcr.io/<owner>/<repo>:
+    # with:
+    #   dockerfile: ./docker/Dockerfile.prod
+    #   image-name: ghcr.io/my-org/my-repo-sandbox
+```
+
+The workflow automatically respects `.trivyignore` in the repository root for suppressing known false positives.
+
+## `docker-release.yml` — caller template
+
+Consumer repos add a wrapper workflow (e.g. `.github/workflows/docker-release.yml`) that triggers on pushes to `main` and on version tags:
+
+```yaml
+name: Docker Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+jobs:
+  publish:
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/docker-release.yml@<sha>
+    # Optional overrides — omit if your Dockerfile is ./Dockerfile
+    # and your image name is ghcr.io/<owner>/<repo>:
+    # with:
+    #   dockerfile: ./docker/Dockerfile.prod
+    #   image-name: ghcr.io/my-org/my-repo-sandbox
+    secrets: inherit
+```
+
+The `packages: write`, `id-token: write`, `attestations: write`, and `security-events: write` permissions are declared inside the reusable workflow and do not need to be re-declared in the caller. Secrets are passed via `secrets: inherit` so `GITHUB_TOKEN` is available for GHCR login.
 
 ## `baseline-check.yml` — caller template
 
