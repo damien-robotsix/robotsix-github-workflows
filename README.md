@@ -162,6 +162,81 @@ jobs:
 - `AGENT.md` at the repo root with a `damien-robotsix/robotsix-standards` link within the first 20 lines.
 - `.github/dependabot.yml` covering at minimum `uv`, `github-actions`, and `pre-commit` ecosystems (plus `docker` when `has-docker: true` or a root `Dockerfile` exists).
 
+## Branch protection
+
+The fleet standard branch-protection posture is applied via
+`scripts/apply-branch-protection.sh` — an idempotent operator script safe to
+re-run any number of times.  It enforces:
+
+- **main** branch protected (PRs required — no direct pushes).
+- **Squash merge only** (`allow_squash_merge=true`; merge-commit and
+  rebase-merge disabled).
+- **Force-push disabled** (`allow_force_pushes: false`).
+- **Branch deletion disabled** (`allow_deletions: false`).
+- **Linear history required** (`required_linear_history: true` — consistent
+  with squash-only merges).
+- **Required status checks** derived per repo from actual check-run names on
+  the tip of `main`, filtered to the shared-workflow gate jobs (`baseline`,
+  `tests`, `security`, `scan`).  Repos that do not produce a given check
+  (e.g. a workflow-library repo has no `tests`) are not required to pass it.
+- **Admin enforcement disabled** (`enforce_admins: false`) — the fleet's
+  `auto-release.yml` pushes tags and commits via an admin PAT and would be
+  blocked if admin enforcement were turned on.
+- **No required approving reviews** — the `required_pull_request_reviews`
+  object is non-null (which is what enforces PRs-only), but
+  `required_approving_review_count` is `0` so the fleet's automated
+  auto-release and Dependabot auto-merge flows still function without a human
+  reviewer in the loop.
+
+### Usage
+
+```bash
+# Apply to all non-fork, non-archived repos owned by damien-robotsix:
+OWNER=damien-robotsix scripts/apply-branch-protection.sh
+
+# Apply to specific repos only:
+scripts/apply-branch-protection.sh my-repo another-repo
+
+# Dry-run — print intended API calls and JSON bodies without mutating:
+scripts/apply-branch-protection.sh --dry-run
+
+# Override the derived required-check set:
+CHECKS="Baseline Check / baseline,Python CI / tests" \
+  scripts/apply-branch-protection.sh my-repo
+```
+
+### When to run
+
+- **At repo creation** — new repos start with no branch protection and must
+  be brought into the fleet baseline.
+- **When the shared required-check set changes** — e.g. a new gate job is
+  added to the fleet workflows, or an existing one is renamed.  Re-run the
+  script across all repos to pick up the new contexts.
+
+The script is **idempotent**: re-running it against an already-configured
+repo produces no configuration change and exits 0.  Repos whose default
+branch is not `main` are **skipped** (warning printed, non-fatal).
+
+### Required `gh` auth scopes
+
+The authenticated `gh` token needs:
+
+| Scope | Why |
+|---|---|
+| `repo` | Read repo settings, list repos, read check-run names. |
+| `administration:write` | Set branch protection via the `branches/main/protection` endpoint. |
+
+A token lacking `administration:write` will receive a **403 Forbidden** when
+the script attempts to PUT branch protection.  The script reports this
+clearly and continues to the next repo.
+
+### `--dry-run` and `CHECKS=`
+
+| Option | Effect |
+|---|---|
+| `--dry-run` | Print the intended `gh api` calls and JSON bodies; no mutations are performed. |
+| `CHECKS=…` | Comma-separated list of exact status-check contexts (e.g. `"Baseline Check / baseline,Python CI / tests"`).  Skips per-repo derivation entirely.  Use when you know the exact set of required contexts for a repo. |
+
 ## Standards
 
 This repo follows the [robotsix stack standards](https://github.com/damien-robotsix/robotsix-standards).
