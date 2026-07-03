@@ -1,5 +1,6 @@
 ## 0.0.0 (unreleased)
 
+- Add `scan-container.yml` shared workflow: weekly Trivy rescan of published :main image (SARIF, report-only). Callers provide `on: schedule:` in their local wrapper; the reusable workflow handles Trivy scan + SARIF upload to Code Scanning with no gate/exit-code.
 - Add `codeql.yml` reusable workflow for CodeQL static analysis across the fleet
 - Add `scripts/apply-branch-protection.sh` — an idempotent operator script that applies the fleet-standard branch-protection posture (main protected, PRs-only, squash-merge-only, force-push disabled, required-checks derived per repo from shared-workflow gate jobs).  Add "Branch protection" section to README.md with usage, when-to-run, and required `gh` auth scopes.
 - Apply repo-baseline to `robotsix-github-workflows` itself: add `AGENT.md`, `.github/dependabot.yml`, and a `baseline-check.yml` caller template section in README.md.

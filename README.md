@@ -17,6 +17,7 @@ jobs:
 | `auto-release.yml` | scheduled towncrier-driven `0.x` tag-cutting release workflow |
 | `docker-release.yml` | build + push container image |
 | `docker-pr-scan.yml` | build (no push) + Trivy CRITICAL/HIGH scan for PRs |
+| `scan-container.yml` | weekly Trivy rescan of published :main image (SARIF, report-only) |
 | `deps-bump.yml` | scheduled `uv lock --upgrade` PR |
 | `dependabot-auto-merge.yml` | auto-merge Dependabot PRs (protected & unprotected branch handling) |
 | `baseline-check.yml` | enforce AGENT.md and .github/dependabot.yml baseline rules |
@@ -108,6 +109,27 @@ jobs:
 ```
 
 The workflow automatically respects `.trivyignore` in the repository root for suppressing known false positives.
+
+## `scan-container.yml` — caller template
+
+Consumer repos add a wrapper workflow (e.g. `.github/workflows/scan-container.yml`)
+that triggers on a weekly schedule + manual dispatch:
+
+```yaml
+name: Container Rescan
+on:
+  schedule:
+    - cron: "0 6 * * 1"  # Monday 06:00 UTC
+  workflow_dispatch:
+jobs:
+  rescan:
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/scan-container.yml@<sha>
+    # with:
+    #   image-name: "ghcr.io/<owner>/<repo>:main"  # default: ghcr.io/$GITHUB_REPOSITORY:main
+    permissions:
+      security-events: write
+      contents: read
+```
 
 ## `docker-release.yml` — caller template
 
