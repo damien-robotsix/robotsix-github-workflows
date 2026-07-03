@@ -1,5 +1,7 @@
 ## 0.0.0 (unreleased)
 
+- `python-ci.yml`: full standards conformance — the coverage floor is now hard-coded at 80 in the workflow (the `coverage-threshold` input is removed; python.md says the gate stops caring beyond 80, so per-repo raises are gone too), the `run-deptry`/`run-audit`/`run-bandit` opt-out inputs are removed (gates are blocking; a repo that must skip one hand-rolls with a justification comment instead), and a `pre-commit run --all-files` step now runs so hooks and CI gates can't drift.
+
 - Create minimal `.pre-commit-config.yaml` (empty `repos: []`) and restore the `pre-commit` ecosystem
   in Dependabot config — the repo had no `.pre-commit-config.yaml`, causing the weekly update job to
   fail with "dependency_file_not_found", but the baseline check requires the ecosystem entry.
