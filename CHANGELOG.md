@@ -1,5 +1,6 @@
 ## 0.0.0 (unreleased)
 
+- Enhanced `baseline-check.yml` with new checks: README links robotsix-standards, LICENSE is MIT, npm ecosystem auto-detection in dependabot.yml, changelog.d/ and towncrier config validation. Added optional `has-board` input for modules.yaml drift gate (robotsix-modules validate/check-registration/validate-paths). Added MIT LICENSE and uv ecosystem to this repo's own dependabot.yml.
 - Add `queries` and `config-file` inputs to the shared `codeql.yml` reusable workflow.  `queries` defaults to `security-and-quality`; `config-file` supports per-repo CodeQL configuration files (e.g. `.github/codeql/codeql-config.yml`).
 - Create minimal `.pre-commit-config.yaml` (empty `repos: []`) and restore the `pre-commit` ecosystem
   in Dependabot config — the repo had no `.pre-commit-config.yaml`, causing the weekly update job to

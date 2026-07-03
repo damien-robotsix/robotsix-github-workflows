@@ -179,12 +179,19 @@ jobs:
       # in dependabot.yml.  Auto-detection also fires when a Dockerfile
       # exists at the repo root.
       has-docker: false
+
+      # Set true when this repo uses the robotsix board (docs/modules.yaml).
+      # Enables the modules-drift job which validates module registration.
+      has-board: false
 ```
 
 **Consumer prerequisites:**
 
 - `AGENT.md` at the repo root with a `damien-robotsix/robotsix-standards` link within the first 20 lines.
-- `.github/dependabot.yml` covering at minimum `uv`, `github-actions`, and `pre-commit` ecosystems (plus `docker` when `has-docker: true` or a root `Dockerfile` exists).
+- `README.md` at the repo root with a `damien-robotsix/robotsix-standards` reference.
+- `LICENSE` at the repo root using the MIT license.
+- `.github/dependabot.yml` covering at minimum `uv`, `github-actions`, and `pre-commit` ecosystems (plus `docker` when `has-docker: true` or a root `Dockerfile` exists, plus `npm` when `package.json` exists).
+- `changelog.d/` fragment directory and `[tool.towncrier]` section in `pyproject.toml` (only when `pyproject.toml` exists — skipped for non-Python repos).
 
 ## `codeql.yml` — caller template
 
