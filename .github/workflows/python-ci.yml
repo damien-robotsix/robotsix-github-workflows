@@ -79,8 +79,12 @@ on:
         type: boolean
         default: false
 
+permissions:
+  contents: read
+
 jobs:
   tests:
+    name: Tests
     runs-on: ${{ inputs.runs-on }}
     permissions:
       # contents:read is REQUIRED for actions/checkout to clone PRIVATE

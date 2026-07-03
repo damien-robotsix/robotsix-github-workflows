@@ -6,14 +6,18 @@ name: Dependency Bot Auto-Merge
 on:
   workflow_call:
 
+permissions:
+  contents: read
+
 jobs:
   auto-merge:
+    name: Auto-merge
     runs-on: ubuntu-latest
     if: github.actor == 'dependabot[bot]' || github.actor == 'renovate[bot]'
     timeout-minutes: 30
     permissions:
-      contents: write
-      pull-requests: write
+      contents: write        # auto-merge via gh pr merge
+      pull-requests: write   # label PR + gh pr merge
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4

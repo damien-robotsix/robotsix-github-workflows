@@ -48,8 +48,12 @@ on:
           installation token, or a deploy key.
         required: true
 
+permissions:
+  contents: read
+
 jobs:
   release:
+    name: Release
     runs-on: ${{ inputs.runs-on }}
     permissions:
       # contents:write is required to push the release commit and tag

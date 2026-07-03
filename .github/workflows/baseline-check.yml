@@ -13,8 +13,12 @@ on:
         type: boolean
         default: false
 
+permissions:
+  contents: read
+
 jobs:
   baseline:
+    name: Baseline
     runs-on: ubuntu-latest
     permissions:
       contents: read
