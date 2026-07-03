@@ -24,10 +24,13 @@ on:
         type: string
         default: "robotsix_mill"
       coverage-threshold:
-        description: Value for pytest --cov-fail-under.
+        description: >
+          Value for pytest --cov-fail-under. Must be ≥ 80 (fleet-wide hard
+          minimum enforced at runtime). Callers may raise the bar above 80
+          but cannot lower it — passing a value below 80 fails the job.
         required: false
         type: string
-        default: "70"
+        default: "80"
       pytest-args:
         description: Extra pytest selectors/markers.
         required: false
@@ -95,6 +98,22 @@ jobs:
           # Lint/tests read git history but never push; drop the
           # persisted token so it cannot leak via artifacts.
           persist-credentials: false
+
+      - name: Enforce coverage floor (hard minimum 80)
+        # The fleet-wide coverage minimum lives here, not in per-repo
+        # thresholds. Callers may raise the bar above 80 but cannot lower
+        # it — the floor is enforced here so raising it fleet-wide is a
+        # single PR to this file.
+        # [ -lt ] exits with code 2 (not 1) when the operand is not a
+        # valid integer, which also fails the step — acceptable since
+        # valid threshold values are always non-negative integers.
+        env:
+          COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
+        run: |
+          if [ "${COVERAGE_THRESHOLD}" -lt 80 ]; then
+            echo "::error::coverage-threshold=${COVERAGE_THRESHOLD} is below the fleet-wide hard minimum of 80. Either omit the input (default: 80) or set a value ≥ 80."
+            exit 1
+          fi
 
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
