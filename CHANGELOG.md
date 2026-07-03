@@ -1,5 +1,6 @@
 ## 0.0.0 (unreleased)
 
+- Apply repo-baseline to `robotsix-github-workflows` itself: add `AGENT.md`, `.github/dependabot.yml`, and a `baseline-check.yml` caller template section in README.md.
 - New reusable workflow `.github/workflows/baseline-check.yml` that enforces two mechanical repo-baseline rules across all caller repos:
   - `AGENT.md` must exist at the repo root and link to `damien-robotsix/robotsix-standards` within the first 20 lines.
   - `.github/dependabot.yml` must cover `uv`, `github-actions`, and `pre-commit` ecosystems, plus `docker` when the repo ships a container image (opt-in via `has-docker: true` or auto-detected from a root `Dockerfile`).

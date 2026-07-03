@@ -18,6 +18,7 @@ jobs:
 | `docker-release.yml` | build + push container image |
 | `deps-bump.yml` | scheduled `uv lock --upgrade` PR |
 | `dependabot-auto-merge.yml` | auto-merge Dependabot PRs (protected & unprotected branch handling) |
+| `baseline-check.yml` | enforce AGENT.md and .github/dependabot.yml baseline rules |
 
 Mill-domain checks (e.g. `check_kind_literals`) live in robotsix-mill's own CI, not here.
 
@@ -83,6 +84,35 @@ jobs:
 
 - An existing `docker-release.yml` caller workflow that maps `v*` tags
   to `X.Y.Z` image tags via `type=semver,pattern={{version}}`.
+
+## `baseline-check.yml` — caller template
+
+Consumer repos add a wrapper workflow (e.g. `.github/workflows/baseline-check.yml`)
+that triggers on `push`/`pull_request` targeting `main`:
+
+```yaml
+name: Baseline Check
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  baseline:
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/baseline-check.yml@<sha>
+    with:
+      # Set true when this repo builds and pushes a container image.
+      # The check then additionally requires package-ecosystem: docker
+      # in dependabot.yml.  Auto-detection also fires when a Dockerfile
+      # exists at the repo root.
+      has-docker: false
+```
+
+**Consumer prerequisites:**
+
+- `AGENT.md` at the repo root with a `damien-robotsix/robotsix-standards` link within the first 20 lines.
+- `.github/dependabot.yml` covering at minimum `uv`, `github-actions`, and `pre-commit` ecosystems (plus `docker` when `has-docker: true` or a root `Dockerfile` exists).
 
 ## Standards
 
