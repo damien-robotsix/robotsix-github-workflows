@@ -263,9 +263,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Stage the towncrier changes (new changelog entry + deleted
-          # fragments) and the pyproject.toml version bump.
-          git add CHANGELOG.md changelog.d/ pyproject.toml
+          # Stage the pyproject.toml version bump and CHANGELOG.md.
+          # towncrier build already stages fragment deletions via git rm,
+          # so changelog.d/ does not need (and cannot be passed to) git add.
+          git add CHANGELOG.md pyproject.toml
           git commit -m "Release $NEXT"
 
           TAG="v$NEXT"
