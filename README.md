@@ -22,6 +22,7 @@ jobs:
 | `dependabot-auto-merge.yml` | auto-merge Dependabot PRs (protected & unprotected branch handling) |
 | `baseline-check.yml` | enforce AGENT.md and .github/dependabot.yml baseline rules |
 | `codeql.yml` | CodeQL static analysis |
+| `lint-workflows.yml` | actionlint + zizmor audit of workflow files, and SARIF-upload-permission validation |
 
 Mill-domain checks (e.g. `check_kind_literals`) live in robotsix-mill's own CI, not here.
 
@@ -223,6 +224,27 @@ jobs:
       packages: "robotsix-mill robotsix-llmio"  # space-separated first-party packages
     secrets:
       bump-token: ${{ secrets.RELEASE_PAT }}  # MUST NOT be GITHUB_TOKEN
+```
+
+## `lint-workflows.yml` — caller template
+
+Lints the repo's own workflow files (actionlint + zizmor) and validates that
+every reusable workflow uploading SARIF has `security-events: write` on its
+calling jobs. All checks are opt-in via inputs:
+
+```yaml
+name: Lint Workflows
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+jobs:
+  lint-workflows:
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/lint-workflows.yml@<sha>
+    with:
+      run-actionlint: true
+      run-zizmor: true
+      # sarif-workflows: "python-ci.yml codeql.yml scan-container.yml"  # default
 ```
 
 ## Branch protection
