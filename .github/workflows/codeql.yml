@@ -1,0 +1,40 @@
+name: CodeQL
+
+on:
+  workflow_call:
+    inputs:
+      languages:
+        description: Comma-separated CodeQL language identifiers.
+        required: false
+        type: string
+        default: "python"
+      runs-on:
+        description: Runner label for the analysis job.
+        required: false
+        type: string
+        default: "ubuntu-latest"
+
+jobs:
+  analyze:
+    runs-on: ${{ inputs.runs-on }}
+    permissions:
+      contents: read
+      security-events: write  # CodeQL SARIF upload
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+
+      - uses: github/codeql-action/init@03e4368ac7daa2bd82b3e85262f3bf87ee112f57  # v3.36.0
+        with:
+          languages: ${{ inputs.languages }}
+
+      - uses: github/codeql-action/autobuild@03e4368ac7daa2bd82b3e85262f3bf87ee112f57  # v3.36.0
+        # autobuild is a no-op for Python but included so this workflow
+        # extends to compiled languages without changes
+
+      - uses: github/codeql-action/analyze@03e4368ac7daa2bd82b3e85262f3bf87ee112f57  # v3.36.0
+        with:
+          # category disambiguates SARIF uploads when languages contains
+          # multiple values
+          category: "/language:${{ inputs.languages }}"
