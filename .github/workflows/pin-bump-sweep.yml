@@ -1,0 +1,71 @@
+name: Pin Bump Sweep
+
+# Coherent-set fleet-wide pin-bump sweep.
+#
+# Enumerates every non-archived, non-fork repository owned by the configured
+# org, collects all [tool.uv.sources] git-sourced pins across the fleet,
+# resolves the HEAD commit of each unique git URL ONCE, and then opens a PR
+# in every affected repository so that all repos that share a dependency
+# receive the same SHA update in the same sweep.
+#
+# Scheduled weekly (Monday 06:00 UTC) and available for manual dispatch.
+# Also callable via workflow_call for programmatic triggering.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      owner:
+        description: GitHub org/owner whose repos are swept.
+        required: false
+        type: string
+        default: "damien-robotsix"
+  workflow_call:
+    inputs:
+      owner:
+        description: GitHub org/owner whose repos are swept.
+        required: false
+        type: string
+        default: "damien-robotsix"
+      uv-version:
+        description: uv version to install.
+        required: false
+        type: string
+        default: "0.8.15"
+    secrets:
+      sweep-token:
+        description: >
+          Token used to enumerate repos, clone, push branches, and
+          create PRs across the fleet.  MUST be a fine-grained PAT or
+          GitHub App installation token with repo + workflow scope on
+          every fleet repository.  MUST NOT be the default GITHUB_TOKEN.
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  sweep:
+    name: Coherent-set sweep
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+        with:
+          version: ${{ inputs.uv-version }}
+
+      - name: Run coherent-set sweep
+        env:
+          SWEEP_TOKEN: ${{ secrets.sweep-token }}
+          OWNER: ${{ inputs.owner || 'damien-robotsix' }}
+        run: |
+          python3 scripts/pin-bump.py sweep \
+            --owner "$OWNER" \
+            --token-env SWEEP_TOKEN

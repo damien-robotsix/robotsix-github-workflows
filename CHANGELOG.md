@@ -1,5 +1,6 @@
 ## 0.0.0 (unreleased)
 
+- Add `pin-bump.yml` reusable workflow (`workflow_call`) that resolves the latest commit on the default branch of every ``[tool.uv.sources]`` git-sourced dependency and rewrites the ``rev`` field, runs ``uv lock``, and opens a PR. Add `pin-bump-sweep.yml` scheduled (weekly Monday 06:00 UTC) + ``workflow_dispatch`` + ``workflow_call`` workflow that performs a coherent-set fleet-wide sweep: enumerates all fleet repos, collects git-sourced pins, resolves each unique URL *once*, and opens PRs in every affected repo with the same SHA.
 - Enhanced `baseline-check.yml` with new checks: README links robotsix-standards, LICENSE is MIT, npm ecosystem auto-detection in dependabot.yml, changelog.d/ and towncrier config validation. Added optional `has-board` input for modules.yaml drift gate (robotsix-modules validate/check-registration/validate-paths). Added MIT LICENSE and uv ecosystem to this repo's own dependabot.yml.
 - Add `queries` and `config-file` inputs to the shared `codeql.yml` reusable workflow.  `queries` defaults to `security-and-quality`; `config-file` supports per-repo CodeQL configuration files (e.g. `.github/codeql/codeql-config.yml`).
 - Create minimal `.pre-commit-config.yaml` (empty `repos: []`) and restore the `pre-commit` ecosystem
