@@ -1,0 +1,137 @@
+name: Pin Bump
+
+# Bumps ``rev`` fields in [tool.uv.sources] git pins to the latest commit on
+# each dependency's default branch, then runs ``uv lock`` and opens a PR.
+#
+# Unlike deps-bump.yml (which uses uv lock --upgrade-package), this workflow
+# targets git-sourced dependencies that are pinned by commit SHA rather than
+# by version.  It resolves the HEAD commit of each dependency's default branch
+# and rewrites the rev field directly.
+#
+# CRITICAL: This workflow pushes commits and creates/updates PRs, so it MUST
+# use a caller-supplied token that is NOT the default GITHUB_TOKEN.  GitHub
+# deliberately suppresses workflow runs for events created by GITHUB_TOKEN
+# to prevent recursion — CI workflows will NOT fire on the bump PR if you
+# pass GITHUB_TOKEN.  Use a fine-grained PAT, a GitHub App installation
+# token, or a deploy key.
+
+on:
+  workflow_call:
+    inputs:
+      packages:
+        description: >
+          Space-separated list of package names to bump (subset of
+          [tool.uv.sources] entries).  When empty (default), ALL
+          git-sourced pins are bumped.
+        required: false
+        type: string
+        default: ""
+      uv-version:
+        description: uv version to install.
+        required: false
+        type: string
+        default: "0.8.15"
+      default-branch:
+        description: Base branch for the PR and git push target.
+        required: false
+        type: string
+        default: "main"
+      bump-branch:
+        description: >
+          Branch to force-push the bump commit to.  Stable name → repeated
+          runs overwrite; an open PR on the branch is detected and reused
+          rather than duplicated.
+        required: false
+        type: string
+        default: "pin-bump/first-party"
+    secrets:
+      bump-token:
+        description: >
+          Token used to push the bump branch and create/update the PR.
+          MUST NOT be the default GITHUB_TOKEN — GitHub suppresses
+          workflow runs for events created by GITHUB_TOKEN, so CI would
+          not fire on the bump PR.  Use a fine-grained PAT, a GitHub App
+          installation token, or a deploy key.
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  bump:
+    name: Bump git pins
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # push bump branch
+      pull-requests: write   # gh pr create
+    steps:
+      # Checkout the *calling* repo (with the bump-token so the
+      # persisted credential carries the correct identity for git push).
+      # persist-credentials intentionally defaults to true here — this
+      # job must push the bump branch.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          token: ${{ secrets.bump-token }}
+          fetch-depth: 0
+
+      # Checkout the workflow-library repo to get scripts/pin-bump.py.
+      # The script is small, stable utility code; tracking main is
+      # acceptable here (unlike action pins which must be SHA-locked).
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          repository: damien-robotsix/robotsix-github-workflows
+          path: _workflow-lib
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+        with:
+          version: ${{ inputs.uv-version }}
+
+      - name: Resolve and update git pin revs
+        id: bump
+        env:
+          FILTER_PACKAGES: ${{ inputs.packages }}
+        run: |
+          PKG_ARGS=""
+          # shellcheck disable=SC2086
+          for p in $FILTER_PACKAGES; do
+            PKG_ARGS="$PKG_ARGS --packages $p"
+          done
+          # shellcheck disable=SC2086
+          python3 _workflow-lib/scripts/pin-bump.py per-repo $PKG_ARGS
+
+      - name: Detect changes
+        id: diff
+        run: |
+          git diff --quiet pyproject.toml uv.lock && echo "changed=false" >> "$GITHUB_OUTPUT" || echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and push bump branch
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          BUMP_BRANCH: ${{ inputs.bump-branch }}
+          DEFAULT_BRANCH: ${{ inputs.default-branch }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BUMP_BRANCH"
+          git add pyproject.toml uv.lock
+          git commit -m "chore: bump first-party git pin revs"
+          git push --force origin "$BUMP_BRANCH"
+
+      - name: Open or reuse PR
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.bump-token }}
+          BUMP_BRANCH: ${{ inputs.bump-branch }}
+          DEFAULT_BRANCH: ${{ inputs.default-branch }}
+        run: |
+          EXISTING=$(gh pr list --head "$BUMP_BRANCH" --base "$DEFAULT_BRANCH" --json number -q '.[0].number' 2>/dev/null || echo "")
+          if [ -n "$EXISTING" ]; then
+            echo "PR #${EXISTING} already open for ${BUMP_BRANCH} — updated by the force-push above."
+          else
+            gh pr create \
+              --title "chore: bump first-party git pin revs" \
+              --body "Automated first-party git pin bump via \`scripts/pin-bump.py\`." \
+              --base "$DEFAULT_BRANCH" \
+              --head "$BUMP_BRANCH"
+          fi

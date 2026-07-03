@@ -12,6 +12,24 @@ on:
         required: false
         type: boolean
         default: false
+      has-board:
+        description: >
+          Set true when the caller repo uses the robotsix board (docs/modules.yaml).
+          Enables the modules-drift job which validates module registration and
+          path consistency via robotsix-modules.
+        required: false
+        type: boolean
+        default: false
+      python-version:
+        description: Python version for the modules-drift job.
+        required: false
+        type: string
+        default: "3.14"
+      uv-version:
+        description: uv version for the modules-drift job.
+        required: false
+        type: string
+        default: "0.8.15"
 
 permissions:
   contents: read
@@ -49,11 +67,46 @@ jobs:
             exit 1
           fi
 
+      # README.md must exist and link to the robotsix standards
+      # repository.  Unlike AGENT.md, the link can appear anywhere in the
+      # file — README files are often long and the standards link is
+      # conventionally near the bottom.
+      - name: Check README.md exists and links robotsix-standards
+        run: |
+          if [ ! -f README.md ]; then
+            echo "::error::README.md is missing from repo root"
+            exit 1
+          fi
+
+          if ! grep -qE 'damien-robotsix/robotsix-standards' README.md; then
+            echo "::error::README.md does not reference damien-robotsix/robotsix-standards"
+            exit 1
+          fi
+
+      # LICENSE must be present and must be the MIT license.  The check
+      # looks for the distinctive MIT permission grant in the first 20
+      # lines — this is mechanical, not a full legal review.
+      - name: Check LICENSE is MIT
+        run: |
+          if [ ! -f LICENSE ]; then
+            echo "::error::LICENSE is missing from repo root — add an MIT license file"
+            exit 1
+          fi
+
+          # The MIT license is identifiable by its distinctive permission
+          # grant.  Check both the SPDX header form ("MIT License") and
+          # the body text ("Permission is hereby granted").
+          if ! head -n 20 LICENSE | grep -qE 'MIT License|Permission is hereby granted'; then
+            echo "::error::LICENSE does not appear to be the MIT license (expected 'MIT License' or 'Permission is hereby granted' in first 20 lines)"
+            exit 1
+          fi
+
       # Dependabot must cover at minimum the three universal ecosystems:
       # uv (Python deps), github-actions (workflow pinning), and
       # pre-commit (hook pinning).  Docker is additionally required when
-      # the repo ships a container image, detected via either the
-      # has-docker input flag or the presence of a root Dockerfile.
+      # the repo ships a container image (has-docker input or root
+      # Dockerfile).  npm is additionally required when package.json
+      # exists at the repo root (Node.js projects).
       #
       # Boolean inputs arrive as the string "true"/"false" when routed
       # through env: — compare with = not == for POSIX portability.
@@ -92,4 +145,74 @@ jobs:
             fi
           fi
 
+          # npm ecosystem required when the repo contains a package.json
+          # (Node.js project).  Auto-detected from the file's presence.
+          if [ -f package.json ]; then
+            if ! check_ecosystem npm; then
+              echo "::error::.github/dependabot.yml is missing package-ecosystem: npm (package.json detected)"
+              FAIL=1
+            fi
+          fi
+
           [ "$FAIL" -eq 0 ] || exit 1
+
+      # Repos that use towncrier for changelog management must have a
+      # changelog.d/ fragment directory and a [tool.towncrier] section in
+      # pyproject.toml.  This check is auto-detected: it only fires when
+      # pyproject.toml exists, skipping repos that don't use Python.
+      - name: Check changelog.d/ and towncrier config
+        run: |
+          if [ ! -f pyproject.toml ]; then
+            echo "pyproject.toml not found — skipping towncrier check"
+            exit 0
+          fi
+
+          FAIL=0
+
+          if [ ! -d changelog.d ]; then
+            echo "::error::changelog.d/ directory is missing — towncrier needs a fragment directory"
+            FAIL=1
+          fi
+
+          # [tool.towncrier] is the standard TOML section header for
+          # towncrier configuration in pyproject.toml.
+          if ! grep -q '^\[tool\.towncrier\]' pyproject.toml; then
+            echo "::error::pyproject.toml is missing [tool.towncrier] section"
+            FAIL=1
+          fi
+
+          [ "$FAIL" -eq 0 ] || exit 1
+
+  # Modules-drift gate: validates docs/modules.yaml registration and path
+  # consistency.  Only runs when the caller opts in with has-board: true,
+  # since it requires Python, uv, and robotsix-modules to be available.
+  modules:
+    name: Modules drift
+    if: ${{ inputs.has-board }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+        with:
+          version: ${{ inputs.uv-version }}
+
+      - name: Sync dependencies
+        run: uv sync --frozen
+
+      - name: Validate modules.yaml
+        run: uv run --frozen robotsix-modules validate docs/modules.yaml
+
+      - name: Check module registration
+        run: uv run --frozen robotsix-modules check-registration docs/modules.yaml --root .
+
+      - name: Validate module paths
+        run: uv run --frozen robotsix-modules validate-paths docs/modules.yaml --root .

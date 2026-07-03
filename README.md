@@ -191,12 +191,19 @@ jobs:
       # in dependabot.yml.  Auto-detection also fires when a Dockerfile
       # exists at the repo root.
       has-docker: false
+
+      # Set true when this repo uses the robotsix board (docs/modules.yaml).
+      # Enables the modules-drift job which validates module registration.
+      has-board: false
 ```
 
 **Consumer prerequisites:**
 
 - `AGENT.md` at the repo root with a `damien-robotsix/robotsix-standards` link within the first 20 lines.
-- `.github/dependabot.yml` covering at minimum `uv`, `github-actions`, and `pre-commit` ecosystems (plus `docker` when `has-docker: true` or a root `Dockerfile` exists).
+- `README.md` at the repo root with a `damien-robotsix/robotsix-standards` reference.
+- `LICENSE` at the repo root using the MIT license.
+- `.github/dependabot.yml` covering at minimum `uv`, `github-actions`, and `pre-commit` ecosystems (plus `docker` when `has-docker: true` or a root `Dockerfile` exists, plus `npm` when `package.json` exists).
+- `changelog.d/` fragment directory and `[tool.towncrier]` section in `pyproject.toml` (only when `pyproject.toml` exists — skipped for non-Python repos).
 
 ## `codeql.yml` — caller template
 
@@ -211,12 +218,44 @@ on:
   pull_request:
   schedule:
     - cron: "0 7 * * 1"  # weekly on Monday
+permissions:
+  contents: read
 jobs:
   codeql:
     uses: damien-robotsix/robotsix-github-workflows/.github/workflows/codeql.yml@<sha>
+    # All inputs are optional — defaults shown in comments:
     # with:
-    #   languages: "python"  # default
+    #   languages: "python"                   # default
+    #   queries: "security-and-quality"       # default
+    #   config-file: ".github/codeql/codeql-config.yml"  # optional
+    #   runs-on: "ubuntu-latest"              # default
+    permissions:
+      # Required — the reusable workflow needs security-events: write
+      # to upload SARIF results to code scanning.
+      security-events: write
+      contents: read
 ```
+
+**Consumer prerequisites:**
+
+- The calling job must declare `permissions.security-events: write` so
+  CodeQL SARIF results can be uploaded to the repository's code scanning.
+
+- **Optional:** a `.github/codeql/codeql-config.yml` file in the calling
+  repo to customise query packs, paths, or exclusion patterns.  Pass its
+  path via the `config-file` input.  Example config:
+
+  ```yaml
+  name: "Custom CodeQL config"
+  disable-default-queries: false
+  queries:
+    - uses: security-and-quality
+  paths:
+    - src
+  paths-ignore:
+    - tests
+    - '**/*.test.py'
+  ```
 
 ## `deps-bump.yml` — caller template
 
