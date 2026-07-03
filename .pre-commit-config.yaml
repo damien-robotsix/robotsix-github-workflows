@@ -1,0 +1,5 @@
+# Minimal pre-commit config — no hooks are enabled for this repo.
+# This file exists solely so Dependabot's pre-commit ecosystem has
+# something to parse without failing with dependency_file_not_found.
+# See also .github/dependabot.yml.
+repos: []
