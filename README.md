@@ -199,12 +199,44 @@ on:
   pull_request:
   schedule:
     - cron: "0 7 * * 1"  # weekly on Monday
+permissions:
+  contents: read
 jobs:
   codeql:
     uses: damien-robotsix/robotsix-github-workflows/.github/workflows/codeql.yml@<sha>
+    # All inputs are optional — defaults shown in comments:
     # with:
-    #   languages: "python"  # default
+    #   languages: "python"                   # default
+    #   queries: "security-and-quality"       # default
+    #   config-file: ".github/codeql/codeql-config.yml"  # optional
+    #   runs-on: "ubuntu-latest"              # default
+    permissions:
+      # Required — the reusable workflow needs security-events: write
+      # to upload SARIF results to code scanning.
+      security-events: write
+      contents: read
 ```
+
+**Consumer prerequisites:**
+
+- The calling job must declare `permissions.security-events: write` so
+  CodeQL SARIF results can be uploaded to the repository's code scanning.
+
+- **Optional:** a `.github/codeql/codeql-config.yml` file in the calling
+  repo to customise query packs, paths, or exclusion patterns.  Pass its
+  path via the `config-file` input.  Example config:
+
+  ```yaml
+  name: "Custom CodeQL config"
+  disable-default-queries: false
+  queries:
+    - uses: security-and-quality
+  paths:
+    - src
+  paths-ignore:
+    - tests
+    - '**/*.test.py'
+  ```
 
 ## `deps-bump.yml` — caller template
 

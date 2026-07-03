@@ -8,6 +8,16 @@ on:
         required: false
         type: string
         default: "python"
+      queries:
+        description: CodeQL query suite (security-and-quality, security-extended, or a custom suite name).
+        required: false
+        type: string
+        default: "security-and-quality"
+      config-file:
+        description: Path to a repo-local CodeQL configuration file (e.g. .github/codeql/codeql-config.yml).  Empty = no config file.
+        required: false
+        type: string
+        default: ""
       runs-on:
         description: Runner label for the analysis job.
         required: false
@@ -32,6 +42,8 @@ jobs:
       - uses: github/codeql-action/init@03e4368ac7daa2bd82b3e85262f3bf87ee112f57  # v3.36.0
         with:
           languages: ${{ inputs.languages }}
+          queries: ${{ inputs.queries }}
+          config-file: ${{ inputs.config-file }}
 
       - uses: github/codeql-action/autobuild@03e4368ac7daa2bd82b3e85262f3bf87ee112f57  # v3.36.0
         # autobuild is a no-op for Python but included so this workflow
