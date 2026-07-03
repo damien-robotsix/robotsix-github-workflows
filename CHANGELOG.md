@@ -1,5 +1,7 @@
 ## 0.0.0 (unreleased)
 
+- `auto-release.yml`: support authenticating as a **GitHub App** (`app-id` input + `app-private-key` secret; installation token minted in-workflow via `actions/create-github-app-token`) as the preferred alternative to a PAT — `release-token` becomes optional, with a fail-fast check when neither credential is supplied. The protected-branch fallback now also handles **squash-only** repos: when merge commits are disallowed it enables squash auto-merge instead of leaving the release PR open.
+
 - Create minimal `.pre-commit-config.yaml` (empty `repos: []`) and restore the `pre-commit` ecosystem
   in Dependabot config — the repo had no `.pre-commit-config.yaml`, causing the weekly update job to
   fail with "dependency_file_not_found", but the baseline check requires the ecosystem entry.

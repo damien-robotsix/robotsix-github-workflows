@@ -42,14 +42,26 @@ on:
 jobs:
   release:
     uses: damien-robotsix/robotsix-github-workflows/.github/workflows/auto-release.yml@<sha>
+    # Preferred: authenticate as a GitHub App (no expiry, bot identity).
+    # The installation token is minted inside the reusable workflow —
+    # app tokens live ~1h, so they cannot be a static secret, and
+    # reusable-workflow `secrets:` cannot carry runtime step outputs.
+    with:
+      app-id: ${{ vars.RELEASE_APP_ID }}      # repo/org variable, not a secret
     secrets:
-      # MUST NOT be the default GITHUB_TOKEN — GitHub suppresses
-      # workflow runs for events created by GITHUB_TOKEN, so the
-      # v* tag push will NOT trigger docker-release.yml and no
-      # image will ever be built. Use a fine-grained PAT, a GitHub
-      # App installation token, or a deploy key.
-      release-token: ${{ secrets.RELEASE_PAT }}
+      app-private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+    # Alternative: a fine-grained PAT (Contents: read/write on this repo).
+    # MUST NOT be the default GITHUB_TOKEN — GitHub suppresses workflow
+    # runs for events created by GITHUB_TOKEN, so the v* tag push would
+    # NOT trigger docker-release.yml.
+    #    secrets:
+    #      release-token: ${{ secrets.RELEASE_PAT }}
 ```
+
+On squash-only repos (the fleet branch-protection standard), a direct push
+to the default branch is rejected and the workflow falls back to a release
+PR with **squash** auto-merge; the annotated `v*` tag keeps the original
+release commit reachable.
 
 **Consumer prerequisites:**
 
