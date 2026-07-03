@@ -1,0 +1,91 @@
+name: Baseline Check
+
+on:
+  workflow_call:
+    inputs:
+      has-docker:
+        description: >
+          Set true when the caller repo builds and pushes a container image.
+          The check then additionally requires package-ecosystem: docker in
+          dependabot.yml. Auto-detection also fires when a Dockerfile exists
+          at the repo root at check time.
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # persist-credentials: false is the repo convention — this workflow
+      # only reads source files and never pushes.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+
+      # AGENT.md is required at the repo root so autonomous agents have a
+      # repo-specific context file to load.  The standards link must appear
+      # within the first 20 lines so agents that read only the file header
+      # still discover the canonical standards repository.
+      - name: Check AGENT.md exists and links robotsix-standards
+        run: |
+          if [ ! -f AGENT.md ]; then
+            echo "::error::AGENT.md is missing from repo root — create one following https://github.com/damien-robotsix/robotsix-standards"
+            exit 1
+          fi
+
+          # Use grep -qE for the extended regex (single-character
+          # alternation in the repo slug).  The regex is intentionally
+          # loose — we only care that the link is present, not that it
+          # is perfectly formatted Markdown.
+          if ! head -n 20 AGENT.md | grep -qE 'damien-robotsix/robotsix-standards'; then
+            echo "::error::AGENT.md does not reference damien-robotsix/robotsix-standards in the first 20 lines"
+            exit 1
+          fi
+
+      # Dependabot must cover at minimum the three universal ecosystems:
+      # uv (Python deps), github-actions (workflow pinning), and
+      # pre-commit (hook pinning).  Docker is additionally required when
+      # the repo ships a container image, detected via either the
+      # has-docker input flag or the presence of a root Dockerfile.
+      #
+      # Boolean inputs arrive as the string "true"/"false" when routed
+      # through env: — compare with = not == for POSIX portability.
+      - name: Check .github/dependabot.yml covers required ecosystems
+        env:
+          HAS_DOCKER: ${{ inputs.has-docker }}
+        run: |
+          DEPBOT=".github/dependabot.yml"
+
+          if [ ! -f "$DEPBOT" ]; then
+            echo "::error::.github/dependabot.yml is missing — add Dependabot config covering uv, github-actions, and pre-commit"
+            exit 1
+          fi
+
+          # check_ecosystem accepts both unquoted (package-ecosystem: uv)
+          # and double-quoted (package-ecosystem: "uv") YAML forms.
+          check_ecosystem() {
+            grep -qE "package-ecosystem:[[:space:]]+\"?${1}\"?" "$DEPBOT"
+          }
+
+          FAIL=0
+          for eco in uv github-actions pre-commit; do
+            if ! check_ecosystem "$eco"; then
+              echo "::error::.github/dependabot.yml is missing package-ecosystem: ${eco}"
+              FAIL=1
+            fi
+          done
+
+          # Docker ecosystem required when the repo ships a container
+          # image: either the caller declared has-docker: true, or a
+          # Dockerfile is present at the repo root (auto-detection).
+          if [ "$HAS_DOCKER" = "true" ] || [ -f Dockerfile ]; then
+            if ! check_ecosystem docker; then
+              echo "::error::.github/dependabot.yml is missing package-ecosystem: docker (Dockerfile detected or has-docker=true)"
+              FAIL=1
+            fi
+          fi
+
+          [ "$FAIL" -eq 0 ] || exit 1
