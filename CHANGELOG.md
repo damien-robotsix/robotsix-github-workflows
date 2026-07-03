@@ -1,5 +1,11 @@
 ## 0.0.0 (unreleased)
 
+- Migrate `scripts/apply-branch-protection.sh` from classic branch protection to
+  GitHub repository rulesets. The script now creates/updates a
+  `robotsix-fleet-protection` ruleset (PRs required, required status checks,
+  squash-only, linear history, no force-push/deletion) and removes classic
+  protection after applying the ruleset.  Set `BYPASS_APP_ID` to add a GitHub
+  App as a bypass actor so auto-release can direct-push to main.
 - Add `changelog-check.yml` reusable workflow — a towncrier fragment gate for pull requests that is skipped when the PR carries the `skip-changelog` label.
 - `auto-release.yml`: support authenticating as a **GitHub App** (`app-id` input + `app-private-key` secret; installation token minted in-workflow via `actions/create-github-app-token`) as the preferred alternative to a PAT — `release-token` becomes optional, with a fail-fast check when neither credential is supplied. The protected-branch fallback now also handles **squash-only** repos: when merge commits are disallowed it enables squash auto-merge instead of leaving the release PR open.
 - Added README caller-template sections for `pin-bump.yml` and `pin-bump-sweep.yml`.
