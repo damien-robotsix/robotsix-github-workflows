@@ -1,0 +1,188 @@
+name: Lint Workflows
+
+on:
+  workflow_call:
+    inputs:
+      run-actionlint:
+        description: Whether to run actionlint on workflow files.
+        required: false
+        type: boolean
+        default: false
+      run-zizmor:
+        description: Whether to run zizmor security audit on workflow files.
+        required: false
+        type: boolean
+        default: false
+      sarif-workflows:
+        description: >-
+          Space-separated list of reusable workflow filenames (basename only,
+          no path) that upload SARIF results and therefore require the
+          security-events:write permission on every calling job.
+        required: false
+        type: string
+        default: "python-ci.yml codeql.yml scan-container.yml"
+
+jobs:
+  check-permissions:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+
+      - name: Validate SARIF upload permissions
+        env:
+          SARIF_WORKFLOWS: ${{ inputs.sarif-workflows }}
+        # The inline Python script below inspects every workflow file in
+        # .github/workflows/ and verifies that any job which uses: a
+        # SARIF-uploading reusable workflow declares security-events:write
+        # either at the job level or inherits it from the workflow-level
+        # permissions block.  Without this permission GitHub silently
+        # rejects the workflow file with a 0-second startup_failure.
+        run: |
+          python3 -m pip install --quiet pyyaml
+          python3 << 'PYEOF'
+          import os, sys, yaml, glob
+
+          sarif_workflows = set(
+              w.strip() for w in os.environ["SARIF_WORKFLOWS"].split()
+              if w.strip()
+          )
+          if not sarif_workflows:
+              print("::notice::No SARIF workflows configured; nothing to check.")
+              sys.exit(0)
+
+          workflow_dir = ".github/workflows"
+          if not os.path.isdir(workflow_dir):
+              print(f"::notice::{workflow_dir} not found; nothing to check.")
+              sys.exit(0)
+
+          errors = []
+          for path in sorted(
+              glob.glob(f"{workflow_dir}/*.yml") + glob.glob(f"{workflow_dir}/*.yaml")
+          ):
+              with open(path, "r") as fh:
+                  try:
+                      doc = yaml.safe_load(fh)
+                  except yaml.YAMLError as exc:
+                      errors.append(f"{path}: invalid YAML — {exc}")
+                      continue
+
+              if not isinstance(doc, dict) or "jobs" not in doc:
+                  continue
+
+              root_perms = doc.get("permissions", {})
+              # A missing root permissions block (None) means "inherit
+              # org/repo defaults" — effectively permissive.  An empty
+              # dict {} means "none".  The string "write-all" grants
+              # write to everything including security-events.
+              root_has_security_events = None
+              if isinstance(root_perms, dict):
+                  root_se = root_perms.get("security-events", "")
+                  if root_se == "write":
+                      root_has_security_events = True
+                  elif root_se == "none" or root_se == "read":
+                      root_has_security_events = False
+              elif isinstance(root_perms, str):
+                  root_has_security_events = root_perms == "write-all"
+
+              for job_id, job in doc["jobs"].items():
+                  if not isinstance(job, dict):
+                      continue
+                  # Check whether this job uses any SARIF workflow.
+                  uses_sarif = False
+                  steps = job.get("steps", [])
+                  if not isinstance(steps, list):
+                      steps = []
+                  for step in steps:
+                      if not isinstance(step, dict):
+                          continue
+                      uses = step.get("uses", "")
+                      if not isinstance(uses, str):
+                          continue
+                      basename = uses.rsplit("/", 1)[-1]
+                      # Strip any @ref suffix (e.g. python-ci.yml@main →
+                      # python-ci.yml) so we match on the workflow filename.
+                      if "@" in basename:
+                          basename = basename.split("@", 1)[0]
+                      # The uses: line may reference a local or remote
+                      # reusable workflow; we match on the basename
+                      # (e.g. python-ci.yml) regardless of owner/repo
+                      # prefix.
+                      if basename in sarif_workflows:
+                          uses_sarif = True
+                          break
+
+                  if not uses_sarif:
+                      continue
+
+                  # Now check permissions — job-level first, then
+                  # fall back to workflow-level.
+                  def _has_se_write(perms):
+                      """Return True if *perms* grants security-events:write."""
+                      if isinstance(perms, dict):
+                          return perms.get("security-events", "") == "write"
+                      if isinstance(perms, str):
+                          return perms == "write-all"
+                      # None → inherit; empty/other → deny
+                      return False
+
+                  job_perms = job.get("permissions")
+                  se_write = False
+
+                  if job_perms is not None:
+                      se_write = _has_se_write(job_perms)
+                  elif root_has_security_events is not None:
+                      se_write = root_has_security_events
+                  else:
+                      # No permissions declared anywhere → defaults
+                      # are permissive, so security-events is write.
+                      se_write = True
+
+                  if not se_write:
+                      errors.append(
+                          f"{path}: job '{job_id}' uses a SARIF-uploading "
+                          f"reusable workflow but does not grant "
+                          f"security-events:write (neither at job nor "
+                          f"workflow level)."
+                      )
+
+          if errors:
+              for msg in errors:
+                  print(f"::error file={msg.split(':')[0]}::{msg}", file=sys.stderr)
+              sys.exit(1)
+
+          print("::notice::All SARIF-uploading jobs declare security-events:write.")
+          PYEOF
+
+  actionlint:
+    if: ${{ inputs.run-actionlint }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+      - uses: reviewdog/action-actionlint@db58217885f9a6570da9c71be4e40ec33fe44a1f  # v1.65.0
+        with:
+          fail_on_error: true
+
+  zizmor:
+    if: ${{ inputs.run-zizmor }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: "3.14"
+      - name: Run zizmor
+        run: |
+          python3 -m pip install --quiet zizmor
+          zizmor --persona=pedantic .github/workflows/
