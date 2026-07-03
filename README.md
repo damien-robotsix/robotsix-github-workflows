@@ -20,6 +20,7 @@ jobs:
 | `deps-bump.yml` | scheduled `uv lock --upgrade` PR |
 | `dependabot-auto-merge.yml` | auto-merge Dependabot PRs (protected & unprotected branch handling) |
 | `baseline-check.yml` | enforce AGENT.md and .github/dependabot.yml baseline rules |
+| `codeql.yml` | CodeQL static analysis |
 
 Mill-domain checks (e.g. `check_kind_literals`) live in robotsix-mill's own CI, not here.
 
@@ -161,6 +162,26 @@ jobs:
 
 - `AGENT.md` at the repo root with a `damien-robotsix/robotsix-standards` link within the first 20 lines.
 - `.github/dependabot.yml` covering at minimum `uv`, `github-actions`, and `pre-commit` ecosystems (plus `docker` when `has-docker: true` or a root `Dockerfile` exists).
+
+## `codeql.yml` — caller template
+
+Consumer repos add a wrapper workflow (e.g. `.github/workflows/codeql.yml`)
+that triggers on push, pull request, and a weekly schedule:
+
+```yaml
+name: CodeQL
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  schedule:
+    - cron: "0 7 * * 1"  # weekly on Monday
+jobs:
+  codeql:
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/codeql.yml@<sha>
+    # with:
+    #   languages: "python"  # default
+```
 
 ## Branch protection
 
