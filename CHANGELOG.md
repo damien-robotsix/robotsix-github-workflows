@@ -1,5 +1,6 @@
 ## 0.0.0 (unreleased)
 
+- Add `changelog-check.yml` reusable workflow — a towncrier fragment gate for pull requests that is skipped when the PR carries the `skip-changelog` label.
 - `auto-release.yml`: support authenticating as a **GitHub App** (`app-id` input + `app-private-key` secret; installation token minted in-workflow via `actions/create-github-app-token`) as the preferred alternative to a PAT — `release-token` becomes optional, with a fail-fast check when neither credential is supplied. The protected-branch fallback now also handles **squash-only** repos: when merge commits are disallowed it enables squash auto-merge instead of leaving the release PR open.
 - Added README caller-template sections for `pin-bump.yml` and `pin-bump-sweep.yml`.
 - Add `pin-bump.yml` reusable workflow (`workflow_call`) that resolves the latest commit on the default branch of every ``[tool.uv.sources]`` git-sourced dependency and rewrites the ``rev`` field, runs ``uv lock``, and opens a PR. Add `pin-bump-sweep.yml` scheduled (weekly Monday 06:00 UTC) + ``workflow_dispatch`` + ``workflow_call`` workflow that performs a coherent-set fleet-wide sweep: enumerates all fleet repos, collects git-sourced pins, resolves each unique URL *once*, and opens PRs in every affected repo with the same SHA.
