@@ -1,12 +1,21 @@
 name: Auto Release
 
 # CRITICAL: This workflow pushes commits and tags, so it MUST use a
-# caller-supplied token that is NOT the default GITHUB_TOKEN. GitHub
-# deliberately suppresses workflow runs for events created by
+# caller-supplied credential that is NOT the default GITHUB_TOKEN.
+# GitHub deliberately suppresses workflow runs for events created by
 # GITHUB_TOKEN to prevent recursion — if the caller passes
 # GITHUB_TOKEN, the v* tag push will NOT trigger docker-release.yml
-# and no image will ever be built. Use a fine-grained PAT, a GitHub
-# App installation token, or a deploy key.
+# and no image will ever be built.
+#
+# Two supported credentials, preferred first:
+#   1. GitHub App (app-id input + app-private-key secret) — an
+#      installation token is minted per run; no expiry/rotation, bot
+#      identity. App tokens live ~1h so they cannot be stored as a
+#      static secret, which is why minting happens HERE and not in
+#      the caller (reusable-workflow `secrets:` cannot carry runtime
+#      step outputs).
+#   2. Fine-grained PAT (release-token secret) — simplest, but
+#      expires and impersonates the human who minted it.
 #
 # This workflow handles the 0.x release line only. A non-0.x version
 # in pyproject.toml causes a hard failure — the caller must migrate
@@ -30,6 +39,16 @@ on:
         required: false
         type: string
         default: "ubuntu-latest"
+      app-id:
+        description: >
+          GitHub App ID used to mint an installation token for the
+          release push (pair with the app-private-key secret). When
+          set, release-token is ignored. The app must be installed on
+          the repo with contents:write (+ pull-requests:write for the
+          protected-branch fallback).
+        required: false
+        type: string
+        default: ""
       default-branch:
         description: >
           Name of the default branch (e.g. "main" or "master").
@@ -41,12 +60,17 @@ on:
     secrets:
       release-token:
         description: >
-          Token used to push the release commit and tag. MUST NOT be
-          the default GITHUB_TOKEN — GitHub suppresses workflow runs
-          for events created by GITHUB_TOKEN, so docker-release.yml
-          would not fire. Use a fine-grained PAT, a GitHub App
-          installation token, or a deploy key.
-        required: true
+          Fine-grained PAT used to push the release commit and tag.
+          MUST NOT be the default GITHUB_TOKEN — GitHub suppresses
+          workflow runs for events created by GITHUB_TOKEN, so
+          docker-release.yml would not fire. Required when app-id is
+          not set; ignored when it is.
+        required: false
+      app-private-key:
+        description: >
+          PEM private key of the GitHub App named by the app-id
+          input. Required when app-id is set.
+        required: false
 
 permissions:
   contents: read
@@ -63,15 +87,32 @@ jobs:
       # in the protected-branch fallback path.
       pull-requests: write
     steps:
-      # Checkout with the caller-supplied release token so the
-      # persisted credential carries the correct identity for git push.
-      # Unlike every other workflow in this repo, we do NOT set
+      - name: Check release credentials
+        if: ${{ inputs.app-id == '' }}
+        env:
+          HAS_RELEASE_TOKEN: ${{ secrets.release-token != '' }}
+        run: |
+          if [ "$HAS_RELEASE_TOKEN" != "true" ]; then
+            echo "::error::No release credential: set the app-id input (+ app-private-key secret) or the release-token secret." >&2
+            exit 1
+          fi
+
+      - name: Mint GitHub App installation token
+        id: app-token
+        if: ${{ inputs.app-id != '' }}
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349  # v2.2.2
+        with:
+          app-id: ${{ inputs.app-id }}
+          private-key: ${{ secrets.app-private-key }}
+
+      # Checkout with the resolved release credential so the persisted
+      # token carries the correct identity for git push. Unlike every
+      # other workflow in this repo, we do NOT set
       # persist-credentials: false — this workflow MUST push commits
-      # and tags (the persisted token is the whole reason callers
-      # supply a dedicated release-token).
+      # and tags (the dedicated credential is the whole point).
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
-          token: ${{ secrets.release-token }}
+          token: ${{ inputs.app-id != '' && steps.app-token.outputs.token || secrets.release-token }}
           fetch-depth: 0
 
       # Two-step interpreter setup matches python-ci.yml: setup-python
@@ -217,7 +258,7 @@ jobs:
         env:
           NEXT: ${{ steps.next-version.outputs.next }}
           DEFAULT_BRANCH: ${{ inputs.default-branch }}
-          GH_TOKEN: ${{ secrets.release-token }}
+          GH_TOKEN: ${{ inputs.app-id != '' && steps.app-token.outputs.token || secrets.release-token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -267,6 +308,13 @@ jobs:
 
             if [ "$merge_rc" -eq 0 ]; then
               echo "Auto-merge queued for PR (will merge when checks pass)."
+            elif echo "$merge_output" | grep -qi "merge commits are not allowed"; then
+              # Squash-only repos (the fleet branch-protection standard):
+              # fall back to squash auto-merge. The annotated tag keeps
+              # the original release commit reachable even though main's
+              # history carries the squashed equivalent.
+              echo "Merge commits disallowed — enabling squash auto-merge."
+              gh pr merge --auto --squash --delete-branch "$PR_URL"
             elif echo "$merge_output" | grep -qi "protected branch rules not configured"; then
               echo "No branch-protection rules — polling checks then merging directly."
               gh pr checks "$PR_URL" --watch --fail-fast
