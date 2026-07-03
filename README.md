@@ -23,6 +23,8 @@ jobs:
 | `baseline-check.yml` | enforce AGENT.md and .github/dependabot.yml baseline rules |
 | `codeql.yml` | CodeQL static analysis |
 | `lint-workflows.yml` | actionlint + zizmor audit of workflow files, and SARIF-upload-permission validation |
+| `pin-bump.yml` | scheduled per-repo first-party git pin bump PR |
+| `pin-bump-sweep.yml` | fleet-wide coherent-set pin-bump sweep orchestrator |
 
 Mill-domain checks (e.g. `check_kind_literals`) live in robotsix-mill's own CI, not here.
 
@@ -296,6 +298,46 @@ jobs:
       run-actionlint: true
       run-zizmor: true
       # sarif-workflows: "python-ci.yml codeql.yml scan-container.yml"  # default
+```
+
+## `pin-bump.yml` — caller template
+
+Consumer repos add a wrapper workflow (e.g. `.github/workflows/pin-bump.yml`)
+that triggers on a weekly schedule + manual dispatch:
+
+```yaml
+name: Pin Bump
+on:
+  schedule:
+    - cron: "0 10 * * 1"  # Monday 10:00 UTC
+  workflow_dispatch:
+jobs:
+  bump:
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/pin-bump.yml@<sha>
+    with:
+      packages: "robotsix-mill robotsix-llmio"  # space-separated subset of [tool.uv.sources] names; omit for all
+    secrets:
+      bump-token: ${{ secrets.RELEASE_PAT }}  # MUST NOT be GITHUB_TOKEN
+```
+
+## `pin-bump-sweep.yml` — caller template
+
+Consumer repos add a wrapper workflow (e.g. `.github/workflows/pin-bump-sweep.yml`)
+that triggers on a weekly schedule + manual dispatch:
+
+```yaml
+name: Pin Bump Sweep
+on:
+  schedule:
+    - cron: "0 6 * * 1"  # Monday 06:00 UTC
+  workflow_dispatch:
+jobs:
+  sweep:
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/pin-bump-sweep.yml@<sha>
+    with:
+      owner: "damien-robotsix"  # GitHub org/owner to sweep; default shown
+    secrets:
+      sweep-token: ${{ secrets.SWEEP_PAT }}  # PAT with repo+workflow scope; MUST NOT be GITHUB_TOKEN
 ```
 
 ## Branch protection
