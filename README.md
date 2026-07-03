@@ -205,6 +205,26 @@ jobs:
     #   languages: "python"  # default
 ```
 
+## `deps-bump.yml` — caller template
+
+Consumer repos add a wrapper workflow (e.g. `.github/workflows/deps-bump.yml`)
+that triggers on a weekly schedule + manual dispatch:
+
+```yaml
+name: Deps Bump
+on:
+  schedule:
+    - cron: "0 8 * * 1"  # Monday 08:00 UTC
+  workflow_dispatch:
+jobs:
+  bump:
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/deps-bump.yml@<sha>
+    with:
+      packages: "robotsix-mill robotsix-llmio"  # space-separated first-party packages
+    secrets:
+      bump-token: ${{ secrets.RELEASE_PAT }}  # MUST NOT be GITHUB_TOKEN
+```
+
 ## Branch protection
 
 The fleet standard branch-protection posture is applied via
