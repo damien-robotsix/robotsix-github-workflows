@@ -1,6 +1,17 @@
 name: Baseline Check
 
 on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  baseline:
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/baseline-check.yml@<sha>
+    with:
+      # Set true only when this repo builds and pushes a container image.
+      # The check also auto-detects a Dockerfile at the repo root.
+      has-docker: false
   workflow_call:
     inputs:
       has-docker:
