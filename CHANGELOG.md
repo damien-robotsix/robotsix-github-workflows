@@ -1,5 +1,8 @@
 ## 0.0.0 (unreleased)
 
+- Create minimal `.pre-commit-config.yaml` (empty `repos: []`) and restore the `pre-commit` ecosystem
+  in Dependabot config — the repo had no `.pre-commit-config.yaml`, causing the weekly update job to
+  fail with "dependency_file_not_found", but the baseline check requires the ecosystem entry.
 - Remove `uv` (Python) package-ecosystem from Dependabot config — this
   repo has no Python dependency files, causing Dependabot CI failures.
 - Add `lint-workflows.yml` reusable workflow that validates SARIF-uploading jobs declare `security-events:write` (prevents silent `startup_failure` on workflow dispatch). Includes optional `actionlint` and `zizmor` jobs gated behind `run-actionlint` / `run-zizmor` boolean inputs (both default `false`).
