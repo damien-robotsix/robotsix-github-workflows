@@ -1,5 +1,7 @@
 ## 0.0.0 (unreleased)
 
+- Remove `uv` (Python) package-ecosystem from Dependabot config — this
+  repo has no Python dependency files, causing Dependabot CI failures.
 - Add `lint-workflows.yml` reusable workflow that validates SARIF-uploading jobs declare `security-events:write` (prevents silent `startup_failure` on workflow dispatch). Includes optional `actionlint` and `zizmor` jobs gated behind `run-actionlint` / `run-zizmor` boolean inputs (both default `false`).
 - Add `deps-bump.yml` reusable workflow for scheduled first-party pin bumps via `uv lock --upgrade-package`.
 - Enforce 80% coverage floor as hard minimum in `python-ci.yml`: default threshold raised from 70 to 80, with a validation step that rejects caller-supplied values below 80.
