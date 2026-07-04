@@ -126,6 +126,62 @@ jobs:
 
 The workflow automatically respects `.trivyignore` in the repository root for suppressing known false positives.
 
+## `python-ci.yml` — caller template
+
+Consumer repos add a wrapper workflow (e.g. `.github/workflows/python-ci.yml`)
+that triggers on `push`/`pull_request` targeting `main`:
+
+```yaml
+name: Python CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  tests:
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/python-ci.yml@<sha>
+    # All inputs are optional — defaults shown in comments:
+    # with:
+    #   python-version: "3.14"                    # default
+    #   uv-version: "0.8.15"                      # default
+    #   install-extras: "tracing"                 # default
+    #   cov-package: "robotsix_mill"              # default
+    #   coverage-threshold: "80"                  # default (fleet hard minimum)
+    #   pytest-args: '-m "not docker"'            # default
+    #   pytest-numprocesses: "auto"               # default
+    #   runs-on: "ubuntu-latest"                  # default
+    #   run-deptry: true                          # default
+    #   run-audit: true                           # default
+    #   run-bandit: true                          # default
+    #   bandit-severity: "medium"                 # default
+    #   mypy-advisory: false                      # default
+    #   audit-ignore: ""                          # default — no advisories ignored
+    #     # When ignoring advisories, every id MUST carry a justifying
+    #     # comment (same convention as .trivyignore).  Example:
+    #     # audit-ignore: >
+    #     #   GHSA-w8v5-vhqr-4h9v  # diskcache unsafe pickle, no fix available (2026-07)
+```
+
+### `audit-ignore` convention
+
+The `audit-ignore` input accepts space- or comma-separated GHSA/CVE ids.  Each
+id is passed to `uv audit` as `--ignore-until-fixed`, which automatically
+un-ignores the advisory once a fix version ships — this matches the fleet
+policy of blocking on fixable findings only.
+
+**Every ignored id MUST carry a justifying comment** in the caller workflow
+YAML (same convention as `.trivyignore`).  Use YAML folded scalars (`>`)
+to keep the comment on a trailing line:
+
+```yaml
+with:
+  audit-ignore: >
+    GHSA-w8v5-vhqr-4h9v  # diskcache unsafe pickle deserialization, no fix available (2026-07)
+    GHSA-xxxx-yyyy-zzzz  # another advisory with no released fix
+```
+
 ## `scan-container.yml` — caller template
 
 Consumer repos add a wrapper workflow (e.g. `.github/workflows/scan-container.yml`)

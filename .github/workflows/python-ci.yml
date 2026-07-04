@@ -56,6 +56,17 @@ on:
         required: false
         type: boolean
         default: true
+      audit-ignore:
+        description: >
+          Space- or comma-separated GHSA/CVE ids to pass as repeated
+          --ignore-until-fixed flags to uv audit. Each ignored id MUST
+          carry a justifying comment in the caller workflow (same convention
+          as .trivyignore). Ignored ids are automatically un-ignored once a
+          fix ships, matching the fleet policy of blocking on fixable
+          findings only.
+        required: false
+        type: string
+        default: ""
       run-bandit:
         description: Whether to run the bandit security SAST step.
         required: false
@@ -160,6 +171,7 @@ jobs:
         if: ${{ inputs.run-audit }}
         env:
           UV_PROJECT_ENVIRONMENT: system
+          AUDIT_IGNORE: ${{ inputs.audit-ignore }}
         # uv audit --frozen reads the committed uv.lock natively.
         # It's a preview subcommand (needs --preview in stable builds)
         # but --help works without --preview since uv ≥ 0.6.12, so we
@@ -170,7 +182,16 @@ jobs:
         # those via a passthrough pip-audit run would be a false-pass.
         run: |
           if uv audit --help >/dev/null 2>&1; then
-            uv audit --frozen --preview
+            # Build repeated --ignore-until-fixed flags from audit-ignore input
+            # (space- or comma-separated). --ignore-until-fixed automatically
+            # un-ignores once a fix ships, matching the fleet policy of
+            # blocking on fixable findings only.
+            audit_ignore_flags=""
+            for id in $(echo "$AUDIT_IGNORE" | tr ',' ' '); do
+              audit_ignore_flags="$audit_ignore_flags --ignore-until-fixed $id"
+            done
+            # shellcheck disable=SC2086
+            uv audit --frozen --preview $audit_ignore_flags
           else
             # --no-hashes avoids pip hash-verification failures on VCS (git)
             # dependencies, which can't carry hashes. Also strip the editable
