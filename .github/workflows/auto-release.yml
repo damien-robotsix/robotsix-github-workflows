@@ -236,6 +236,23 @@ jobs:
           echo "Bumped pyproject.toml version: $CURRENT → $NEXT"
 
       # ------------------------------------------------------------------
+      # Refresh uv.lock so the release commit passes the `uv lock --check`
+      # freshness gate in CI.  Use --upgrade-package <project-name> rather
+      # than a bare `uv lock` — a bare lock would silently pull new @main
+      # commits of git dependencies, which is never safe in a release step.
+      # ------------------------------------------------------------------
+      - name: Refresh lockfile for the new version
+        if: steps.fragments.outputs.has_fragments == 'true'
+        run: |
+          if [ -f uv.lock ]; then
+            PROJECT_NAME=$(uv run python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['name'])")
+            uv lock --upgrade-package "$PROJECT_NAME"
+            echo "Refreshed uv.lock with project version bump for $PROJECT_NAME."
+          else
+            echo "No uv.lock found — skipping lock refresh."
+          fi
+
+      # ------------------------------------------------------------------
       # Commit, tag, push.
       #
       # Two paths:
@@ -267,6 +284,7 @@ jobs:
           # towncrier build already stages fragment deletions via git rm,
           # so changelog.d/ does not need (and cannot be passed to) git add.
           git add CHANGELOG.md pyproject.toml
+          [ -f uv.lock ] && git add uv.lock || true
           git commit -m "Release $NEXT"
 
           TAG="v$NEXT"
