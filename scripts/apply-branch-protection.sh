@@ -7,9 +7,11 @@ set -euo pipefail
 # Idempotent operator script that applies the robotsix fleet standard
 # branch-protection posture to every fleet repo (or a user-supplied subset).
 #
-# Safe to re-run any number of times — the PUT and PATCH endpoints are
-# full-replace, so re-applying the same settings produces no configuration
-# diff on a repo that is already in the desired state.
+# Uses GitHub repository rulesets (not classic branch protection).
+# Safe to re-run any number of times — an existing ruleset is updated
+# in-place via PUT; a missing one is created via POST.  Classic branch
+# protection is removed after the ruleset is applied, completing the
+# migration.
 #
 # Required gh token scopes: repo, administration:write
 #
@@ -18,12 +20,18 @@ set -euo pipefail
 #   scripts/apply-branch-protection.sh repo-a repo-b  # specific repos
 #   scripts/apply-branch-protection.sh --dry-run    # preview only
 #   CHECKS="ctx1,ctx2" scripts/apply-branch-protection.sh  # override checks
+#   BYPASS_APP_ID=12345 scripts/apply-branch-protection.sh  # add bypass actor
 # ============================================================================
 
 # --- Configuration ---------------------------------------------------------
 OWNER="${OWNER:-damien-robotsix}"
 DRY_RUN=false
 REPOS=()
+
+# Optional GitHub App ID added as a ruleset bypass actor so the release
+# App can direct-push to main.  Set to the numeric App ID (not the
+# installation ID).  When empty or unset, no bypass actor is configured.
+BYPASS_APP_ID="${BYPASS_APP_ID:-}"
 
 # Known shared-workflow gate job names.  Required check contexts are derived
 # per repo by inspecting actual check-run names on the tip of main and keeping
@@ -56,6 +64,11 @@ Environment:
   CHECKS          Comma-separated list of exact status-check contexts.
                   Overrides the per-repo derivation.  Example:
                     CHECKS="Baseline Check / baseline,Python CI / tests"
+  BYPASS_APP_ID   Numeric GitHub App ID to add as a ruleset bypass
+                  actor.  When set, the App can direct-push to main
+                  (needed for auto-release.yml).  Leave unset for no
+                  bypass actor.  Example:
+                    BYPASS_APP_ID=123456
 
 Required gh token scopes: repo, administration:write
 HELP
@@ -231,9 +244,22 @@ apply_repo_settings() {
   return 0
 }
 
-# --- Branch protection -----------------------------------------------------
-# PUT /repos/$OWNER/$repo/branches/main/protection with a full JSON body.
-# We use python3 to construct the body because it handles JSON escaping
+# --- Branch protection (repository ruleset) --------------------------------
+# Manages a repository ruleset named "robotsix-fleet-protection" that
+# enforces the fleet-standard posture:
+#   - PRs required (0 reviews — automation-friendly)
+#   - Required status checks (strict, derived from check runs on main)
+#   - Squash-only merges via PR
+#   - Linear history required
+#   - No force-pushes, no branch deletion
+#
+# If BYPASS_APP_ID is set, the designated GitHub App is added as a
+# bypass actor so it can push releases directly to main.
+#
+# Classic branch protection (if present) is removed after the ruleset
+# is applied, completing the migration from classic to rulesets.
+#
+# We use python3 to construct the JSON body because it handles escaping
 # correctly for arbitrary check-run names, and because nested arrays
 # cannot be expressed with gh's -f / -F flags.
 apply_branch_protection() {
@@ -246,62 +272,127 @@ apply_branch_protection() {
     checks+=("$c")
   done < <(derive_checks "$repo")
 
-  # Build the branch-protection JSON body via python3 (handles JSON
-  # escaping correctly for arbitrary check-run names).  We pass the
-  # check names as arguments (sys.argv[1:]) so they survive any
-  # special characters intact, and send the Python script via stdin.
+  # Build the ruleset JSON body via python3.  We pass the check names
+  # as arguments (sys.argv[1:]) so they survive any special characters
+  # intact, and send the Python script via stdin.  BYPASS_APP_ID is
+  # forwarded through the environment.
   local body
-  body=$(python3 - "${checks[@]}" <<'PYEOF'
-import json, sys
+  body=$(BYPASS_APP_ID="${BYPASS_APP_ID:-}" python3 - "${checks[@]}" <<'PYEOF'
+import json, os, sys
 
 checks = sys.argv[1:]
+bypass_app_id = os.environ.get("BYPASS_APP_ID", "")
+
+rules = [
+    # A non-null pull_request rule is what enforces "PRs required /
+    # no direct pushes".  We set the review count to 0 so the fleet
+    # automated auto-release and dependabot auto-merge flows still
+    # work without a human reviewer in the loop.
+    {
+        "type": "pull_request",
+        "parameters": {
+            "required_approving_review_count": 0,
+            "dismiss_stale_reviews_on_push": False,
+            "require_code_owner_review": False,
+            "require_last_push_approval": False,
+            "required_review_thread_resolution": False,
+            "allowed_merge_methods": ["squash"]
+        }
+    },
+    {"type": "required_linear_history"},
+    {
+        "type": "required_status_checks",
+        "parameters": {
+            "strict_required_status_checks_policy": True,
+            "required_status_checks": [{"context": c} for c in checks]
+        }
+    },
+    {"type": "deletion"},
+    {"type": "non_fast_forward"}
+]
 
 body = {
-    # A non-null reviews object is what enforces "PRs required / no
-    # direct pushes".  We set the count to 0 so the fleet automated
-    # auto-release and dependabot auto-merge flows still work without
-    # a human reviewer in the loop.
-    "required_pull_request_reviews": {
-        "required_approving_review_count": 0,
-        "dismiss_stale_reviews": False
+    "name": "robotsix-fleet-protection",
+    "target": "branch",
+    "enforcement": "active",
+    "conditions": {
+        "ref_name": {
+            "include": ["refs/heads/main"],
+            "exclude": []
+        }
     },
-    "required_status_checks": {
-        "strict": True,
-        "checks": [{"context": c} for c in checks]
-    },
-    # enforce_admins: False
-    # The fleet auto-release.yml pushes tags and commits using a PAT
-    # that is an org admin.  Setting enforce_admins to True would block
-    # those pushes, breaking the automated release pipeline.
-    "enforce_admins": False,
-    "restrictions": None,
-    "allow_force_pushes": False,
-    "allow_deletions": False,
-    "required_linear_history": True
+    "rules": rules
 }
+
+# The fleet auto-release.yml pushes commits and tags as a GitHub App.
+# Under classic branch protection an App cannot bypass; under rulesets
+# the App can be listed as a bypass actor, allowing direct pushes to
+# main without the PR+auto-merge fallback.
+if bypass_app_id:
+    body["bypass_actors"] = [
+        {
+            "actor_id": int(bypass_app_id),
+            "actor_type": "Integration",
+            "bypass_mode": "always"
+        }
+    ]
 
 print(json.dumps(body, indent=2))
 PYEOF
 )
 
+  # Resolve the ruleset: look for an existing one by name, then
+  # create or update.  This is what makes the script idempotent.
+  local existing_id
+  existing_id=$(gh api "repos/$OWNER/$repo/rulesets" \
+    --jq '.[] | select(.name == "robotsix-fleet-protection") | .id' 2>/dev/null) || true
+
   if $DRY_RUN; then
-    echo "  [dry-run] PUT /repos/$OWNER/$repo/branches/main/protection"
+    if [[ -n "$existing_id" ]]; then
+      echo "  [dry-run] PUT /repos/$OWNER/$repo/rulesets/$existing_id"
+    else
+      echo "  [dry-run] POST /repos/$OWNER/$repo/rulesets"
+    fi
     echo "  $body"
+    echo "  [dry-run] DELETE /repos/$OWNER/$repo/branches/main/protection"
     return 0
   fi
 
   local err_output
-  err_output=$(gh api -X PUT "repos/$OWNER/$repo/branches/main/protection" \
-    --input - 2>&1 1>/dev/null <<< "$body") || {
-    if echo "$err_output" | grep -qi '403\|Forbidden'; then
-      echo "ERROR: $repo — 403 Forbidden on branch-protection PUT." >&2
-      echo "       Branch protection requires a token with 'administration:write' scope." >&2
-    else
-      echo "ERROR: $repo — branch-protection PUT failed:" >&2
-      echo "       $err_output" >&2
-    fi
-    return 1
-  }
+  if [[ -n "$existing_id" ]]; then
+    err_output=$(gh api -X PUT "repos/$OWNER/$repo/rulesets/$existing_id" \
+      --input - 2>&1 1>/dev/null <<< "$body") || {
+      if echo "$err_output" | grep -qi '403\|Forbidden'; then
+        echo "ERROR: $repo — 403 Forbidden on ruleset PUT." >&2
+        echo "       Rulesets require a token with 'administration:write' scope." >&2
+      else
+        echo "ERROR: $repo — ruleset PUT failed:" >&2
+        echo "       $err_output" >&2
+      fi
+      return 1
+    }
+  else
+    err_output=$(gh api -X POST "repos/$OWNER/$repo/rulesets" \
+      --input - 2>&1 1>/dev/null <<< "$body") || {
+      if echo "$err_output" | grep -qi '403\|Forbidden'; then
+        echo "ERROR: $repo — 403 Forbidden on ruleset POST." >&2
+        echo "       Rulesets require a token with 'administration:write' scope." >&2
+      else
+        echo "ERROR: $repo — ruleset POST failed:" >&2
+        echo "       $err_output" >&2
+      fi
+      return 1
+    }
+  fi
+
+  # Remove classic branch protection if it exists — completes the
+  # migration from classic to rulesets.  Non-fatal: the classic
+  # protection may already have been removed, or the token may lack
+  # the scope (we already applied the ruleset, which is the primary
+  # goal).
+  gh api -X DELETE "repos/$OWNER/$repo/branches/main/protection" \
+    2>/dev/null || true
+
   return 0
 }
 
@@ -321,7 +412,7 @@ process_one_repo() {
   # Step 1 — repo-level merge settings (squash-merge enforcement).
   apply_repo_settings "$repo" || return 1
 
-  # Step 2 — branch protection on main.
+  # Step 2 — repository ruleset on main (with classic-protection cleanup).
   apply_branch_protection "$repo" || return 1
 
   echo "ok: $repo"
