@@ -191,6 +191,46 @@ with:
     GHSA-xxxx-yyyy-zzzz  # another advisory with no released fix
 ```
 
+## `python-docs.yml` — caller template
+
+Consumer repos add a wrapper workflow (e.g. `.github/workflows/docs.yml`)
+that triggers on pushes to `main` and pull requests:
+
+```yaml
+name: Docs
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  docs:
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/python-docs.yml@<sha>
+    # All inputs are optional — defaults shown in comments:
+    # with:
+    #   docs-install-args: "--group docs"      # default
+    #   python-version: "3.14"                 # default
+    #   uv-version: "0.8.15"                   # default
+    #   retries: "4"                           # default
+    # No permissions block is needed — the reusable workflow declares
+    # job-level `pages: write` + `id-token: write` for the deploy job
+    # and `pages: read` for the build job.  Do NOT grant
+    # `contents: write` — the workflow deploys via GitHub Pages Actions,
+    # not the legacy `mkdocs gh-deploy` push-to-branch method.
+```
+
+**Consumer prerequisites:**
+
+- The repository must have GitHub Pages enabled with source **"GitHub Actions"**
+  (`build_type: workflow`).  Enable once per repo:
+  ```bash
+  gh api "repos/$(gh repo view --json nameWithOwner -q .nameWithOwner)/pages" \
+    -X POST \
+    -f "source[build_type]=workflow"
+  ```
+  or visit Settings → Pages and select "GitHub Actions" as the source.
+
 ## `scan-container.yml` — caller template
 
 Consumer repos add a wrapper workflow (e.g. `.github/workflows/scan-container.yml`)
