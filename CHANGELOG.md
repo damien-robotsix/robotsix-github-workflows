@@ -1,5 +1,6 @@
 ## 0.0.0 (unreleased)
 
+- `auto-release.yml` now regenerates `uv.lock` after bumping the version in `pyproject.toml`, so the release commit passes the `uv lock --check` freshness gate in CI. Uses `uv lock --upgrade-package <project-name>` (not bare `uv lock`) to avoid silently pulling new commits of git dependencies.
 - `pin-bump.yml`: add optional `app-id` input + `app-private-key` secret for GitHub App authentication (mirrors auto-release.yml pattern). The existing `bump-token` PAT remains as the fallback when `app-id` is not set.
 - Migrate `scripts/apply-branch-protection.sh` from classic branch protection to
   GitHub repository rulesets. The script now creates/updates a
