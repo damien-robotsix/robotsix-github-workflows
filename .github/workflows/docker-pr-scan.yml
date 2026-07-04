@@ -16,6 +16,14 @@ on:
         required: false
         type: string
         default: ""
+      use-gha-cache:
+        description: >
+          Whether to use the GitHub Actions layer cache (`cache-from`/`cache-to`).
+          For large images (multi-GB), the GHA cache can add 45-55 minutes per
+          run — time both paths on the actual image before enabling.
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -47,8 +55,8 @@ jobs:
           push: false
           load: true
           tags: ${{ steps.image-ref.outputs.image }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: ${{ inputs.use-gha-cache && 'type=gha' || '' }}
+          cache-to: ${{ inputs.use-gha-cache && 'type=gha,mode=max' || '' }}
 
       # Gate: CRITICAL and HIGH fixable CVEs block the pipeline. Runs in
       # table format so the failing CVE row is visible in the CI log
