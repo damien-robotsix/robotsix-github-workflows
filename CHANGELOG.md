@@ -1,5 +1,6 @@
 ## 0.0.0 (unreleased)
 
+- `scripts/apply-branch-protection.sh`: `KNOWN_GATES` trailing-segment match is now case-insensitive, preventing the ruleset from requiring stale contexts when shared-workflow job names change casing (e.g. `Tests` vs `tests`).  Documented the need to re-run the script after any change that renames gate jobs.
 - `python-docs.yml`: build step now passes `--strict` to `mkdocs build`, turning warnings into hard errors.  Build job gained `pages: read` permission (needed by `configure-pages`).  Added caller template to `README.md` documenting the Pages `build_type: workflow` prerequisite and the correct (none-needed) caller permissions.
 - `docker-pr-scan.yml`: add `use-gha-cache` boolean input (default `true`) to let callers skip the GHA layer cache for large images where cache export dominates build time.
 - `python-ci.yml`: add `audit-ignore` input for passing GHSA/CVE ids as `--ignore-until-fixed` flags to `uv audit`, matching the fleet policy of blocking on fixable findings only. Document the justifying-comment convention in the README caller template.

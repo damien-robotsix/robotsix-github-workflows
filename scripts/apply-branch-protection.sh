@@ -33,10 +33,18 @@ REPOS=()
 # installation ID).  When empty or unset, no bypass actor is configured.
 BYPASS_APP_ID="${BYPASS_APP_ID:-}"
 
-# Known shared-workflow gate job names.  Required check contexts are derived
-# per repo by inspecting actual check-run names on the tip of main and keeping
-# only those whose trailing segment (the part after the last ' / ', or the
-# whole name when there is no ' / ') matches one of these gate names.
+# Known shared-workflow gate job names (matched case-insensitively).
+# Required check contexts are derived per repo by inspecting actual
+# check-run names on the tip of main and keeping only those whose
+# trailing segment (the part after the last ' / ', or the whole name
+# when there is no ' / ') matches one of these gate names.
+#
+# IMPORTANT: after any change that renames a shared-workflow gate job
+# (e.g. bumping pinned workflow commit SHAs that rename job keys),
+# re-run this script so it derives updated required-status-check
+# contexts from the new check-run names on main.  Otherwise the
+# ruleset may require contexts that no longer exist and auto-merge
+# will hang.
 KNOWN_GATES=(baseline tests security scan)
 
 # --- Parse arguments -------------------------------------------------------
@@ -192,7 +200,7 @@ derive_checks() {
       trailing="${name##* / }"
     fi
     for gate in "${KNOWN_GATES[@]}"; do
-      if [[ "$trailing" == "$gate" ]]; then
+      if [[ "${trailing,,}" == "${gate,,}" ]]; then
         derived+=("$name")
         break
       fi
