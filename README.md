@@ -122,9 +122,18 @@ jobs:
     # with:
     #   dockerfile: ./docker/Dockerfile.prod
     #   image-name: ghcr.io/my-org/my-repo-sandbox
+    #   use-gha-cache: false
 ```
 
 The workflow automatically respects `.trivyignore` in the repository root for suppressing known false positives.
+
+### `use-gha-cache`
+
+The GHA layer cache (`cache-from`/`cache-to`) is enabled by default. For
+large images (multi-GB), exporting layers to the GHA cache API can add
+45–55 minutes per run — far longer than a cold build. Time both paths on
+the actual image before enabling the cache. Set `use-gha-cache: false` to
+skip the cache entirely.
 
 ## `python-ci.yml` — caller template
 
