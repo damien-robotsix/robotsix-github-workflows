@@ -1,5 +1,6 @@
 ## 0.0.0 (unreleased)
 
+- `pin-bump.yml`: add optional `app-id` input + `app-private-key` secret for GitHub App authentication (mirrors auto-release.yml pattern). The existing `bump-token` PAT remains as the fallback when `app-id` is not set.
 - Migrate `scripts/apply-branch-protection.sh` from classic branch protection to
   GitHub repository rulesets. The script now creates/updates a
   `robotsix-fleet-protection` ruleset (PRs required, required status checks,

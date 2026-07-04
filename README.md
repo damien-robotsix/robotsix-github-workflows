@@ -342,8 +342,9 @@ jobs:
     uses: damien-robotsix/robotsix-github-workflows/.github/workflows/pin-bump.yml@<sha>
     with:
       packages: "robotsix-mill robotsix-llmio"  # space-separated subset of [tool.uv.sources] names; omit for all
+      app-id: "3752211"  # fleet GitHub App; omit to use bump-token PAT fallback
     secrets:
-      bump-token: ${{ secrets.RELEASE_PAT }}  # MUST NOT be GITHUB_TOKEN
+      app-private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}  # GitHub App private key
 ```
 
 ## `pin-bump-sweep.yml` — caller template
