@@ -1,5 +1,6 @@
 ## 0.0.0 (unreleased)
 
+- `python-docs.yml`: build step now passes `--strict` to `mkdocs build`, turning warnings into hard errors.  Build job gained `pages: read` permission (needed by `configure-pages`).  Added caller template to `README.md` documenting the Pages `build_type: workflow` prerequisite and the correct (none-needed) caller permissions.
 - `docker-pr-scan.yml`: add `use-gha-cache` boolean input (default `true`) to let callers skip the GHA layer cache for large images where cache export dominates build time.
 - `python-ci.yml`: add `audit-ignore` input for passing GHSA/CVE ids as `--ignore-until-fixed` flags to `uv audit`, matching the fleet policy of blocking on fixable findings only. Document the justifying-comment convention in the README caller template.
 - `auto-release.yml` now regenerates `uv.lock` after bumping the version in `pyproject.toml`, so the release commit passes the `uv lock --check` freshness gate in CI. Uses `uv lock --upgrade-package <project-name>` (not bare `uv lock`) to avoid silently pulling new commits of git dependencies.
