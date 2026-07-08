@@ -1,5 +1,10 @@
 ## 0.0.0 (unreleased)
 
+- `dependabot-auto-merge.yml`: extend auto-merge to `robotsix-mill[bot]` PRs so mill-authored branches have a merge path instead of silently skipping.
+- `python-ci.yml`: remove unused `security-events:write` job permission (the workflow never uploads SARIF results), eliminating `startup_failure` when the caller cannot grant the scope.
+- `python-docs.yml`: guard `deploy` job with `if: github.event_name != 'pull_request'` so Pages permissions are only evaluated on push-to-main, not on PR branches.
+- `lint-workflows.yml`: drop `python-ci.yml` from the default `sarif-workflows` list (it no longer uploads SARIF).
+- README: document explicit `permissions` blocks for `python-ci.yml` and `python-docs.yml` caller templates.
 - Guard `pin-bump-sweep` job with `if: github.event_name == 'workflow_call'` to prevent scheduled/dispatch runs from failing when the `sweep-token` repository secret is not configured.
 - `scripts/apply-branch-protection.sh`: `KNOWN_GATES` trailing-segment match is now case-insensitive, preventing the ruleset from requiring stale contexts when shared-workflow job names change casing (e.g. `Tests` vs `tests`).  Documented the need to re-run the script after any change that renames gate jobs.
 - `python-docs.yml`: build step now passes `--strict` to `mkdocs build`, turning warnings into hard errors.  Build job gained `pages: read` permission (needed by `configure-pages`).  Added caller template to `README.md` documenting the Pages `build_type: workflow` prerequisite and the correct (none-needed) caller permissions.

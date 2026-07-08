@@ -20,7 +20,7 @@ on:
           security-events:write permission on every calling job.
         required: false
         type: string
-        default: "python-ci.yml codeql.yml scan-container.yml"
+        default: "codeql.yml scan-container.yml"
 
 jobs:
   check-permissions:

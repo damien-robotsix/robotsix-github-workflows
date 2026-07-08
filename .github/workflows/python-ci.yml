@@ -102,10 +102,8 @@ jobs:
       # caller repos. Declaring any permissions block resets all unlisted
       # scopes to `none`; without contents:read the checkout of a private
       # consumer fails with "Repository not found" (public callers are
-      # unaffected — their clone needs no token). security-events:write is
-      # for the SARIF upload.
+      # unaffected — their clone needs no token).
       contents: read
-      security-events: write
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
