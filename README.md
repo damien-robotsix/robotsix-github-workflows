@@ -151,6 +151,8 @@ on:
 jobs:
   tests:
     uses: damien-robotsix/robotsix-github-workflows/.github/workflows/python-ci.yml@<sha>
+    permissions:
+      contents: read
     # All inputs are optional — defaults shown in comments:
     # with:
     #   python-version: "3.14"                    # default
@@ -207,17 +209,16 @@ on:
 jobs:
   docs:
     uses: damien-robotsix/robotsix-github-workflows/.github/workflows/python-docs.yml@<sha>
+    permissions:
+      contents: read
+      pages: write       # required for Pages deploy
+      id-token: write    # required for Pages deploy
     # All inputs are optional — defaults shown in comments:
     # with:
     #   docs-install-args: "--group docs"      # default
     #   python-version: "3.14"                 # default
     #   uv-version: "0.8.15"                   # default
     #   retries: "4"                           # default
-    # No permissions block is needed — the reusable workflow declares
-    # job-level `pages: write` + `id-token: write` for the deploy job
-    # and `pages: read` for the build job.  Do NOT grant
-    # `contents: write` — the workflow deploys via GitHub Pages Actions,
-    # not the legacy `mkdocs gh-deploy` push-to-branch method.
 ```
 
 **Consumer prerequisites:**
