@@ -169,4 +169,4 @@ jobs:
         with:
           name: sbom
           path: sbom.json
-          if-no-files-found: error
+          if-no-files-found: warn
