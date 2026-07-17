@@ -23,12 +23,3 @@ updates:
       - "dependencies"
       - "pre-commit"
 
-  - package-ecosystem: "uv"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    commit-message:
-      prefix: "deps"
-    labels:
-      - "dependencies"
-      - "uv"
