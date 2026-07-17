@@ -128,12 +128,21 @@ jobs:
           }
 
           FAIL=0
-          for eco in uv github-actions pre-commit; do
+          for eco in github-actions pre-commit; do
             if ! check_ecosystem "$eco"; then
               echo "::error::.github/dependabot.yml is missing package-ecosystem: ${eco}"
               FAIL=1
             fi
           done
+
+          # uv ecosystem required when the repo contains a pyproject.toml
+          # (Python project).  Auto-detected from the file's presence.
+          if [ -f pyproject.toml ]; then
+            if ! check_ecosystem uv; then
+              echo "::error::.github/dependabot.yml is missing package-ecosystem: uv (pyproject.toml detected)"
+              FAIL=1
+            fi
+          fi
 
           # Docker ecosystem required when the repo ships a container
           # image: either the caller declared has-docker: true, or a
