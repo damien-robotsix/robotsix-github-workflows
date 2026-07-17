@@ -1,5 +1,6 @@
 ## 0.0.0 (unreleased)
 
+- Make `uv` ecosystem requirement in baseline-check.yml conditional on `pyproject.toml`, matching the existing Docker and npm auto-detection patterns. Fixes a recurring CI ping-pong where Dependabot fails on repos without Python code.
 - `python-security.yml`: change SBOM artifact upload `if-no-files-found` from `error` to `warn` so that best-effort SBOM generation (which uses `|| true`) doesn't cause a hard CI failure when `sbom.json` is absent.
 - `dependabot-auto-merge.yml`: extend auto-merge to `robotsix-mill[bot]` PRs so mill-authored branches have a merge path instead of silently skipping.
 - `python-ci.yml`: remove unused `security-events:write` job permission (the workflow never uploads SARIF results), eliminating `startup_failure` when the caller cannot grant the scope.
