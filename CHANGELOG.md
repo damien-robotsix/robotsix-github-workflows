@@ -1,5 +1,9 @@
 ## 0.0.0 (unreleased)
 
+- Add `job_split` input to `python-ci.yml` (default `false`). When `true`,
+  emits separate `lint`, `typecheck`, and `test` jobs instead of one
+  monolithic `tests` job, reducing CI wall-clock time from ~sum-of-all to
+  ~max-of-three.
 - Make `uv` ecosystem requirement in baseline-check.yml conditional on `pyproject.toml`, matching the existing Docker and npm auto-detection patterns. Fixes a recurring CI ping-pong where Dependabot fails on repos without Python code.
 - `python-security.yml`: change SBOM artifact upload `if-no-files-found` from `error` to `warn` so that best-effort SBOM generation (which uses `|| true`) doesn't cause a hard CI failure when `sbom.json` is absent.
 - `dependabot-auto-merge.yml`: extend auto-merge to `robotsix-mill[bot]` PRs so mill-authored branches have a merge path instead of silently skipping.

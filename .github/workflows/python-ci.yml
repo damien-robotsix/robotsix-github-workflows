@@ -89,12 +89,23 @@ on:
         required: false
         type: boolean
         default: false
+      job_split:
+        description: >-
+          When true, emit separate lint, typecheck, and test jobs instead of one
+          monolithic tests job. Each reports its own green/red status check and
+          runs in parallel, reducing CI wall-clock time from ~sum-of-all to
+          ~max-of-three. When false (default), a single tests job runs all steps
+          sequentially — backward-compatible with existing callers.
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
   tests:
+    if: ${{ !inputs.job_split }}
     name: Tests
     runs-on: ${{ inputs.runs-on }}
     permissions:
@@ -274,6 +285,191 @@ jobs:
           # consumer (e.g. a freshly-scaffolded member repo) fails with
           # "pytest: error: unrecognized arguments: --cov" because the plugin
           # is not installed.
+          uv run --with pytest-xdist --with pytest-cov pytest tests/ -n "$PYTEST_NUMPROCESSES" --dist loadscope -x "$@" --tb=long --cov="$COV_PACKAGE" --cov-fail-under="$COVERAGE_THRESHOLD" --cov-report=term-missing
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: coverage-data
+          path: |
+            .coverage*
+            coverage.xml
+          retention-days: 1
+
+  lint:
+    if: ${{ inputs.job_split }}
+    name: Lint
+    runs-on: ${{ inputs.runs-on }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+        with:
+          version: ${{ inputs.uv-version }}
+
+      - name: Install dev deps
+        run: |
+          extras=""
+          # shellcheck disable=SC2086
+          for x in $INSTALL_EXTRAS; do
+            extras="$extras --extra $x"
+          done
+          # shellcheck disable=SC2086
+          uv sync --frozen $extras
+        env:
+          UV_PROJECT_ENVIRONMENT: system
+          INSTALL_EXTRAS: ${{ inputs.install-extras }}
+
+      - name: deptry (dependency hygiene)
+        if: ${{ inputs.run-deptry }}
+        env:
+          UV_PROJECT_ENVIRONMENT: system
+        run: uv run --with deptry deptry .
+
+      - name: Dependency audit (CVE scan)
+        if: ${{ inputs.run-audit }}
+        env:
+          UV_PROJECT_ENVIRONMENT: system
+          AUDIT_IGNORE: ${{ inputs.audit-ignore }}
+        run: |
+          if uv audit --help >/dev/null 2>&1; then
+            audit_ignore_flags=""
+            for id in $(echo "$AUDIT_IGNORE" | tr ',' ' '); do
+              audit_ignore_flags="$audit_ignore_flags --ignore-until-fixed $id"
+            done
+            # shellcheck disable=SC2086
+            uv audit --frozen --preview $audit_ignore_flags
+          else
+            uv export --frozen --no-hashes | grep -v '^-e \.' | uv run --with pip-audit pip-audit -r /dev/stdin
+          fi
+
+      - name: Ruff (lint + format check)
+        env:
+          UV_PROJECT_ENVIRONMENT: system
+        run: |
+          uv run ruff check --output-format=github .
+          uv run ruff format --check --diff .
+
+  typecheck:
+    if: ${{ inputs.job_split }}
+    name: Type Check
+    runs-on: ${{ inputs.runs-on }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+        with:
+          version: ${{ inputs.uv-version }}
+
+      - name: Install dev deps
+        run: |
+          extras=""
+          # shellcheck disable=SC2086
+          for x in $INSTALL_EXTRAS; do
+            extras="$extras --extra $x"
+          done
+          # shellcheck disable=SC2086
+          uv sync --frozen $extras
+        env:
+          UV_PROJECT_ENVIRONMENT: system
+          INSTALL_EXTRAS: ${{ inputs.install-extras }}
+
+      - name: Mypy (static type check, baseline ratchet)
+        if: ${{ inputs.mypy-advisory }}
+        env:
+          UV_PROJECT_ENVIRONMENT: system
+        run: uv run mypy src/ --strict | uv run --with mypy-baseline mypy-baseline filter
+
+      - name: Mypy (baseline burndown nudge)
+        if: ${{ inputs.mypy-advisory }}
+        env:
+          UV_PROJECT_ENVIRONMENT: system
+        run: uv run --with mypy-baseline mypy-baseline suggest --exit-zero --default-branch origin/main
+
+      - name: Mypy (static type check)
+        if: ${{ !inputs.mypy-advisory }}
+        env:
+          UV_PROJECT_ENVIRONMENT: system
+        run: uv run mypy src/ --strict
+
+      - name: Bandit (security SAST)
+        if: ${{ inputs.run-bandit }}
+        env:
+          UV_PROJECT_ENVIRONMENT: system
+          BANDIT_SEVERITY: ${{ inputs.bandit-severity }}
+        run: uv run --with 'bandit[toml]' bandit -c pyproject.toml -r src/ --severity-level "$BANDIT_SEVERITY"
+
+  test:
+    if: ${{ inputs.job_split }}
+    name: Test
+    runs-on: ${{ inputs.runs-on }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Enforce coverage floor (hard minimum 80)
+        env:
+          COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
+        run: |
+          if [ "${COVERAGE_THRESHOLD}" -lt 80 ]; then
+            echo "::error::coverage-threshold=${COVERAGE_THRESHOLD} is below the fleet-wide hard minimum of 80. Either omit the input (default: 80) or set a value ≥ 80."
+            exit 1
+          fi
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+        with:
+          version: ${{ inputs.uv-version }}
+
+      - name: Install dev deps
+        run: |
+          extras=""
+          # shellcheck disable=SC2086
+          for x in $INSTALL_EXTRAS; do
+            extras="$extras --extra $x"
+          done
+          # shellcheck disable=SC2086
+          uv sync --frozen $extras
+        env:
+          UV_PROJECT_ENVIRONMENT: system
+          INSTALL_EXTRAS: ${{ inputs.install-extras }}
+
+      - name: Run tests
+        env:
+          UV_PROJECT_ENVIRONMENT: system
+          GIT_BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || 'HEAD~1' }}
+          PYTEST_EXTRA_ARGS: ${{ inputs.pytest-args }}
+          PYTEST_NUMPROCESSES: ${{ inputs.pytest-numprocesses }}
+          COV_PACKAGE: ${{ inputs.cov-package }}
+          COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
+        run: |
+          eval "set -- $PYTEST_EXTRA_ARGS"
           uv run --with pytest-xdist --with pytest-cov pytest tests/ -n "$PYTEST_NUMPROCESSES" --dist loadscope -x "$@" --tb=long --cov="$COV_PACKAGE" --cov-fail-under="$COVERAGE_THRESHOLD" --cov-report=term-missing
 
       - name: Upload coverage data
