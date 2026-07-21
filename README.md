@@ -173,6 +173,11 @@ jobs:
     #     # comment (same convention as .trivyignore).  Example:
     #     # audit-ignore: >
     #     #   GHSA-w8v5-vhqr-4h9v  # diskcache unsafe pickle, no fix available (2026-07)
+    #   job_split: false                          # default — single monolithic Tests job
+    #     # When true, emits three parallel jobs (Lint, Type Check, Test)
+    #     # instead of one sequential Tests job.  Each reports its own
+    #     # green/red status check, reducing CI wall-clock time from
+    #     # ~sum-of-all to ~max-of-three.
 ```
 
 ### `audit-ignore` convention
