@@ -53,12 +53,6 @@ jobs:
       app-id: ${{ vars.RELEASE_APP_ID }}      # repo/org variable, not a secret
     secrets:
       app-private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-    # Alternative: a fine-grained PAT (Contents: read/write on this repo).
-    # MUST NOT be the default GITHUB_TOKEN — GitHub suppresses workflow
-    # runs for events created by GITHUB_TOKEN, so the v* tag push would
-    # NOT trigger docker-release.yml.
-    #    secrets:
-    #      release-token: ${{ secrets.RELEASE_PAT }}
 ```
 
 On squash-only repos (the fleet branch-protection standard), a direct push
@@ -412,8 +406,9 @@ jobs:
     uses: damien-robotsix/robotsix-github-workflows/.github/workflows/deps-bump.yml@<sha>
     with:
       packages: "robotsix-mill robotsix-llmio"  # space-separated first-party packages
+      app-id: "3752211"  # fleet GitHub App
     secrets:
-      bump-token: ${{ secrets.RELEASE_PAT }}  # MUST NOT be GITHUB_TOKEN
+      app-private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}  # GitHub App private key
 ```
 
 ## `lint-workflows.yml` — caller template
@@ -453,7 +448,7 @@ jobs:
     uses: damien-robotsix/robotsix-github-workflows/.github/workflows/pin-bump.yml@<sha>
     with:
       packages: "robotsix-mill robotsix-llmio"  # space-separated subset of [tool.uv.sources] names; omit for all
-      app-id: "3752211"  # fleet GitHub App; omit to use bump-token PAT fallback
+      app-id: "3752211"  # fleet GitHub App
     secrets:
       app-private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}  # GitHub App private key
 ```
@@ -474,8 +469,9 @@ jobs:
     uses: damien-robotsix/robotsix-github-workflows/.github/workflows/pin-bump-sweep.yml@<sha>
     with:
       owner: "damien-robotsix"  # GitHub org/owner to sweep; default shown
+      app-id: "3752211"  # fleet GitHub App
     secrets:
-      sweep-token: ${{ secrets.SWEEP_PAT }}  # PAT with repo+workflow scope; MUST NOT be GITHUB_TOKEN
+      app-private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}  # GitHub App private key
 ```
 
 ## Branch protection

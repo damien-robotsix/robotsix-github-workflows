@@ -33,13 +33,19 @@ on:
         required: false
         type: string
         default: "0.8.15"
-    secrets:
-      sweep-token:
+      app-id:
         description: >
-          Token used to enumerate repos, clone, push branches, and
-          create PRs across the fleet.  MUST be a fine-grained PAT or
-          GitHub App installation token with repo + workflow scope on
-          every fleet repository.  MUST NOT be the default GITHUB_TOKEN.
+          GitHub App ID used to mint an installation token for the
+          sweep (pair with the app-private-key secret). The app
+          must be installed on every fleet repository with
+          contents:write and pull-requests:write.
+        required: true
+        type: string
+    secrets:
+      app-private-key:
+        description: >
+          PEM private key of the GitHub App named by the app-id
+          input.
         required: true
 
 permissions:
@@ -54,6 +60,13 @@ jobs:
       contents: read
     timeout-minutes: 60
     steps:
+      - name: Mint GitHub App installation token
+        id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349  # v2.2.2
+        with:
+          app-id: ${{ inputs.app-id }}
+          private-key: ${{ secrets.app-private-key }}
+
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           persist-credentials: false
@@ -64,7 +77,7 @@ jobs:
 
       - name: Run coherent-set sweep
         env:
-          SWEEP_TOKEN: ${{ secrets.sweep-token }}
+          SWEEP_TOKEN: ${{ steps.app-token.outputs.token }}
           OWNER: ${{ inputs.owner || 'damien-robotsix' }}
         run: |
           python3 scripts/pin-bump.py sweep \
