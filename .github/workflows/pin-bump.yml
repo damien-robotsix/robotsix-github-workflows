@@ -14,15 +14,12 @@ name: Pin Bump
 # GITHUB_TOKEN to prevent recursion — CI workflows will NOT fire on the bump
 # PR if you pass GITHUB_TOKEN.
 #
-# Two supported credentials, preferred first:
-#   1. GitHub App (app-id input + app-private-key secret) — an
-#      installation token is minted per run; no expiry/rotation, bot
-#      identity. App tokens live ~1h so they cannot be stored as a
-#      static secret, which is why minting happens HERE and not in
-#      the caller (reusable-workflow `secrets:` cannot carry runtime
-#      step outputs).
-#   2. Fine-grained PAT (bump-token secret) — simplest, but
-#      expires and impersonates the human who minted it.
+# The caller MUST supply a GitHub App (app-id input + app-private-key
+# secret). An installation token is minted per run; no expiry/rotation,
+# bot identity. App tokens live ~1h so they cannot be stored as a
+# static secret, which is why minting happens HERE and not in the
+# caller (reusable-workflow `secrets:` cannot carry runtime step
+# outputs).
 
 on:
   workflow_call:
@@ -56,26 +53,17 @@ on:
       app-id:
         description: >
           GitHub App ID used to mint an installation token for the
-          bump push (pair with the app-private-key secret). When
-          set, bump-token is ignored. The app must be installed on
-          the repo with contents:write and pull-requests:write.
-        required: false
+          bump push (pair with the app-private-key secret). The app
+          must be installed on the repo with contents:write and
+          pull-requests:write.
+        required: true
         type: string
-        default: ""
     secrets:
-      bump-token:
-        description: >
-          Token used to push the bump branch and create/update the PR.
-          MUST NOT be the default GITHUB_TOKEN — GitHub suppresses
-          workflow runs for events created by GITHUB_TOKEN, so CI would
-          not fire on the bump PR. Required when app-id is not set;
-          ignored when it is.
-        required: false
       app-private-key:
         description: >
           PEM private key of the GitHub App named by the app-id
           input. Required when app-id is set.
-        required: false
+        required: true
 
 permissions:
   contents: read
@@ -88,19 +76,8 @@ jobs:
       contents: write        # push bump branch
       pull-requests: write   # gh pr create
     steps:
-      - name: Check bump credentials
-        if: ${{ inputs.app-id == '' }}
-        env:
-          HAS_BUMP_TOKEN: ${{ secrets.bump-token != '' }}
-        run: |
-          if [ "$HAS_BUMP_TOKEN" != "true" ]; then
-            echo "::error::No bump credential: set the app-id input (+ app-private-key secret) or the bump-token secret." >&2
-            exit 1
-          fi
-
       - name: Mint GitHub App installation token
         id: app-token
-        if: ${{ inputs.app-id != '' }}
         uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349  # v2.2.2
         with:
           app-id: ${{ inputs.app-id }}
@@ -112,7 +89,7 @@ jobs:
       # job must push the bump branch.
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
-          token: ${{ inputs.app-id != '' && steps.app-token.outputs.token || secrets.bump-token }}
+          token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0
 
       # Checkout the workflow-library repo to get scripts/pin-bump.py.
@@ -162,7 +139,7 @@ jobs:
       - name: Open or reuse PR
         if: steps.diff.outputs.changed == 'true'
         env:
-          GH_TOKEN: ${{ inputs.app-id != '' && steps.app-token.outputs.token || secrets.bump-token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           BUMP_BRANCH: ${{ inputs.bump-branch }}
           DEFAULT_BRANCH: ${{ inputs.default-branch }}
         run: |

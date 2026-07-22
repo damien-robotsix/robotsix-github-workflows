@@ -7,15 +7,12 @@ name: Auto Release
 # GITHUB_TOKEN, the v* tag push will NOT trigger docker-release.yml
 # and no image will ever be built.
 #
-# Two supported credentials, preferred first:
-#   1. GitHub App (app-id input + app-private-key secret) — an
-#      installation token is minted per run; no expiry/rotation, bot
-#      identity. App tokens live ~1h so they cannot be stored as a
-#      static secret, which is why minting happens HERE and not in
-#      the caller (reusable-workflow `secrets:` cannot carry runtime
-#      step outputs).
-#   2. Fine-grained PAT (release-token secret) — simplest, but
-#      expires and impersonates the human who minted it.
+# The caller MUST supply a GitHub App (app-id input + app-private-key
+# secret). An installation token is minted per run; no expiry/rotation,
+# bot identity. App tokens live ~1h so they cannot be stored as a
+# static secret, which is why minting happens HERE and not in the
+# caller (reusable-workflow `secrets:` cannot carry runtime step
+# outputs).
 #
 # This workflow handles the 0.x release line only. A non-0.x version
 # in pyproject.toml causes a hard failure — the caller must migrate
@@ -42,13 +39,11 @@ on:
       app-id:
         description: >
           GitHub App ID used to mint an installation token for the
-          release push (pair with the app-private-key secret). When
-          set, release-token is ignored. The app must be installed on
-          the repo with contents:write (+ pull-requests:write for the
-          protected-branch fallback).
-        required: false
+          release push (pair with the app-private-key secret). The
+          app must be installed on the repo with contents:write
+          (+ pull-requests:write for the protected-branch fallback).
+        required: true
         type: string
-        default: ""
       default-branch:
         description: >
           Name of the default branch (e.g. "main" or "master").
@@ -58,19 +53,11 @@ on:
         type: string
         default: "main"
     secrets:
-      release-token:
-        description: >
-          Fine-grained PAT used to push the release commit and tag.
-          MUST NOT be the default GITHUB_TOKEN — GitHub suppresses
-          workflow runs for events created by GITHUB_TOKEN, so
-          docker-release.yml would not fire. Required when app-id is
-          not set; ignored when it is.
-        required: false
       app-private-key:
         description: >
           PEM private key of the GitHub App named by the app-id
           input. Required when app-id is set.
-        required: false
+        required: true
 
 permissions:
   contents: read
@@ -87,19 +74,8 @@ jobs:
       # in the protected-branch fallback path.
       pull-requests: write
     steps:
-      - name: Check release credentials
-        if: ${{ inputs.app-id == '' }}
-        env:
-          HAS_RELEASE_TOKEN: ${{ secrets.release-token != '' }}
-        run: |
-          if [ "$HAS_RELEASE_TOKEN" != "true" ]; then
-            echo "::error::No release credential: set the app-id input (+ app-private-key secret) or the release-token secret." >&2
-            exit 1
-          fi
-
       - name: Mint GitHub App installation token
         id: app-token
-        if: ${{ inputs.app-id != '' }}
         uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349  # v2.2.2
         with:
           app-id: ${{ inputs.app-id }}
@@ -112,7 +88,7 @@ jobs:
       # and tags (the dedicated credential is the whole point).
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
-          token: ${{ inputs.app-id != '' && steps.app-token.outputs.token || secrets.release-token }}
+          token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0
 
       # Two-step interpreter setup matches python-ci.yml: setup-python
@@ -275,7 +251,7 @@ jobs:
         env:
           NEXT: ${{ steps.next-version.outputs.next }}
           DEFAULT_BRANCH: ${{ inputs.default-branch }}
-          GH_TOKEN: ${{ inputs.app-id != '' && steps.app-token.outputs.token || secrets.release-token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
