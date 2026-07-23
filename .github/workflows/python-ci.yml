@@ -285,17 +285,16 @@ jobs:
           # consumer (e.g. a freshly-scaffolded member repo) fails with
           # "pytest: error: unrecognized arguments: --cov" because the plugin
           # is not installed.
-          uv run --with pytest-xdist --with pytest-cov pytest tests/ -n "$PYTEST_NUMPROCESSES" --dist loadscope -x "$@" --tb=long --cov="$COV_PACKAGE" --cov-fail-under="$COVERAGE_THRESHOLD" --cov-report=term-missing
+          uv run --with pytest-xdist --with pytest-cov pytest tests/ -n "$PYTEST_NUMPROCESSES" --dist loadscope -x "$@" --tb=long --cov="$COV_PACKAGE" --cov-fail-under="$COVERAGE_THRESHOLD" --cov-report=term-missing --cov-report=xml:coverage.xml
 
       - name: Upload coverage data
-        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: coverage-data
           path: |
-            .coverage*
             coverage.xml
-          retention-days: 1
+            .coverage
+          if-no-files-found: error
 
   lint:
     if: ${{ inputs.job_split }}
@@ -470,14 +469,13 @@ jobs:
           COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
         run: |
           eval "set -- $PYTEST_EXTRA_ARGS"
-          uv run --with pytest-xdist --with pytest-cov pytest tests/ -n "$PYTEST_NUMPROCESSES" --dist loadscope -x "$@" --tb=long --cov="$COV_PACKAGE" --cov-fail-under="$COVERAGE_THRESHOLD" --cov-report=term-missing
+          uv run --with pytest-xdist --with pytest-cov pytest tests/ -n "$PYTEST_NUMPROCESSES" --dist loadscope -x "$@" --tb=long --cov="$COV_PACKAGE" --cov-fail-under="$COVERAGE_THRESHOLD" --cov-report=term-missing --cov-report=xml:coverage.xml
 
       - name: Upload coverage data
-        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: coverage-data
           path: |
-            .coverage*
             coverage.xml
-          retention-days: 1
+            .coverage
+          if-no-files-found: error

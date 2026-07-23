@@ -1,5 +1,6 @@
 ## 0.0.0 (unreleased)
 
+- `python-ci.yml`: upload `coverage-data` artifact (`coverage.xml` + `.coverage`) after test runs, and emit `--cov-report=xml:coverage.xml` so the XML report is always available for downstream coverage-diff tooling.
 - **Breaking:** all four bump/release reusable workflows (`pin-bump.yml`, `auto-release.yml`, `deps-bump.yml`, `pin-bump-sweep.yml`) now require a GitHub App (`app-id` input + `app-private-key` secret). All PAT fallback secrets (`bump-token`, `release-token`, `sweep-token`) have been retired. Every workflow mints installation tokens via `actions/create-github-app-token` with a single consistent input/secret naming convention.
 - Add `job_split` input to `python-ci.yml` (default `false`). When `true`,
   emits separate `lint`, `typecheck`, and `test` jobs instead of one
