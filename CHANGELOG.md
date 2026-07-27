@@ -1,5 +1,14 @@
 ## 0.0.0 (unreleased)
 
+- Add `config-ownership-check.yml` reusable workflow — a PR gate that
+  prevents deploy-plane config (docker-compose, Kubernetes, Helm) from
+  introducing environment variables for component-internal settings.
+  New env vars are checked against a conservative orchestration-only
+  whitelist (ports, volumes, resource limits, health checks, etc.);
+  violations cite robotsix-standards config-standard.md.  An opt-in
+  central-deploy UI check flags component-internal setting names in UI
+  config files.  Includes integration tests (compliant change passes,
+  violating change fails) and a README caller template.
 - `python-ci.yml`: upload `coverage-data` artifact (`coverage.xml` + `.coverage`) after test runs, and emit `--cov-report=xml:coverage.xml` so the XML report is always available for downstream coverage-diff tooling.
 - **Breaking:** all four bump/release reusable workflows (`pin-bump.yml`, `auto-release.yml`, `deps-bump.yml`, `pin-bump-sweep.yml`) now require a GitHub App (`app-id` input + `app-private-key` secret). All PAT fallback secrets (`bump-token`, `release-token`, `sweep-token`) have been retired. Every workflow mints installation tokens via `actions/create-github-app-token` with a single consistent input/secret naming convention.
 - Add `job_split` input to `python-ci.yml` (default `false`). When `true`,

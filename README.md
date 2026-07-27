@@ -23,6 +23,7 @@ jobs:
 | `baseline-check.yml` | enforce AGENT.md and .github/dependabot.yml baseline rules |
 | `changelog-check.yml` | towncrier fragment gate for pull requests (skip-changelog label exempt) |
 | `codeql.yml` | CodeQL static analysis |
+| `config-ownership-check.yml` | PR gate: prevents deploy-plane config from leaking component-internal settings |
 | `lint-workflows.yml` | actionlint + zizmor audit of workflow files, and SARIF-upload-permission validation |
 | `pin-bump.yml` | scheduled per-repo first-party git pin bump PR |
 | `pin-bump-sweep.yml` | fleet-wide coherent-set pin-bump sweep orchestrator |
@@ -337,6 +338,58 @@ CI-only or chore PRs that don't need a changelog fragment).
 - A `[tool.towncrier]` config in `pyproject.toml` with a `changelog.d/` fragment directory.
 - The `skip-changelog` label must exist in the repository (the workflow skips on its
   presence; missing labels are silently ignored).
+
+## `config-ownership-check.yml` — caller template
+
+Consumer repos add a wrapper workflow (e.g. `.github/workflows/config-ownership-check.yml`)
+that triggers on pull requests:
+
+```yaml
+name: Config Ownership Check
+
+on:
+  pull_request:
+
+jobs:
+  config-ownership:
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/config-ownership-check.yml@<sha>
+    # All inputs are optional — defaults shown in comments:
+    # with:
+    #   deploy-config-glob: "deploy/**/*.{yml,yaml} **/docker-compose*.{yml,yaml} kubernetes/**/*.{yml,yaml} helm/**/*.{yml,yaml}"
+    #   orchestration-only-patterns: ""
+    #     # When empty, a conservative built-in set is used (ports, volumes,
+    #     # resource limits, health checks, secrets references, etc.).
+    #     # Override with newline-separated Python regex patterns — one per line:
+    #     # orchestration-only-patterns: |
+    #     #   .*_PORT$
+    #     #   .*_MEMORY_LIMIT$
+    #   ui-config-glob: ""
+    #     # Only set when the repo hosts a central-deploy UI.  Most repos
+    #     # should leave this empty.
+    #   base-ref: ""
+    #     # Git ref to diff against.  When empty, merge-base with origin/main
+    #     # (or main) is used automatically.
+```
+
+**What it checks:**
+
+- **Deploy-plane env vars:** Every new environment variable added to deploy
+  config files (docker-compose, Kubernetes, Helm, etc.) is checked against
+  the orchestration-only whitelist.  Settings that the component could own
+  internally (database URLs, API keys, feature flags, timeouts, etc.) are
+  flagged as violations.
+- **Central-deploy UI (opt-in):** When `ui-config-glob` is set, added lines
+  that reference component-internal setting names are flagged.
+
+**Consumer prerequisites:**
+
+- The repository must use deploy-plane config files that the glob patterns
+  match.
+- Review any violations against
+  [robotsix-standards config-standard.md](https://github.com/damien-robotsix/robotsix-standards)
+  — the fix is typically to move the setting into the component's own config
+  (env vars set at build-time, config files owned by the component, or a
+  component-internal defaults mechanism).
 
 ## `codeql.yml` — caller template
 
