@@ -1,0 +1,19 @@
+version: "3.8"
+
+services:
+  app:
+    image: my-app:latest
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    environment:
+      # Orchestration-only — these are infrastructure concerns
+      - APP_PORT=8080
+      - APP_MEMORY_LIMIT=512M
+      - APP_CPU_LIMIT=2.0
+      - APP_HOST=0.0.0.0
+      - TZ=UTC
+      - APP_REPLICAS=3
+      - APP_HEALTHCHECK_INTERVAL=30s
+      # VIOLATION: component-internal setting exposed in deploy config
+      - DATABASE_URL=postgres://localhost:5432/mydb
