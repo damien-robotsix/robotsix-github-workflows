@@ -1,5 +1,6 @@
 ## 0.0.0 (unreleased)
 
+- Bootstrap `.robotsix-mill/` periodic workflow presence files for `audit`, `health`, `survey`, `changelog_autofill`, `repo_description_sync`, `completeness_check`, and `copy_paste`.
 - Add `config-ownership-check.yml` reusable workflow — a PR gate that
   prevents deploy-plane config (docker-compose, Kubernetes, Helm) from
   introducing environment variables for component-internal settings.
