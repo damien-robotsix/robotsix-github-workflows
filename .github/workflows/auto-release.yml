@@ -85,6 +85,7 @@ jobs:
           app-id: ${{ inputs.app-id }}
           app-private-key: ${{ secrets.app-private-key }}
           uv-version: ${{ inputs.uv-version }}
+          repositories: ${{ github.repository }}
 
       # ------------------------------------------------------------------
       # Fragment detection — must run AFTER checkout (needs the source

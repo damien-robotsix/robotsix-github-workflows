@@ -74,6 +74,7 @@ jobs:
           app-id: ${{ inputs.app-id }}
           app-private-key: ${{ secrets.app-private-key }}
           uv-version: ${{ inputs.uv-version }}
+          repositories: ${{ github.repository }}
 
       - name: Upgrade first-party pins
         env:

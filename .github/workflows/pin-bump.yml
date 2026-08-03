@@ -83,6 +83,7 @@ jobs:
           app-id: ${{ inputs.app-id }}
           app-private-key: ${{ secrets.app-private-key }}
           uv-version: ${{ inputs.uv-version }}
+          repositories: ${{ github.repository }}
           checkout-repository: damien-robotsix/robotsix-github-workflows
           checkout-path: _workflow-lib
 
