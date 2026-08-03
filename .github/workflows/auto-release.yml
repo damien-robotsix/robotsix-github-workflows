@@ -74,32 +74,23 @@ jobs:
       # in the protected-branch fallback path.
       pull-requests: write
     steps:
-      - name: Mint GitHub App installation token
-        id: app-token
-        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349  # v2.2.2
-        with:
-          app-id: ${{ inputs.app-id }}
-          private-key: ${{ secrets.app-private-key }}
-
-      # Checkout with the resolved release credential so the persisted
-      # token carries the correct identity for git push. Unlike every
-      # other workflow in this repo, we do NOT set
-      # persist-credentials: false — this workflow MUST push commits
-      # and tags (the dedicated credential is the whole point).
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
-        with:
-          token: ${{ steps.app-token.outputs.token }}
-          fetch-depth: 0
-
-      # Two-step interpreter setup matches python-ci.yml: setup-python
-      # pins the interpreter, setup-uv installs the uv build frontend.
+      # setup-python pins the interpreter; the bump-setup composite then
+      # mints the caller-supplied release token (only a GitHub App token
+      # can trigger CI on the tag push), checks out with it so the
+      # persisted credential can push commits/tags, installs uv, and sets
+      # the bot git identity. Shared prelude with the other bump/release
+      # workflows.
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
           python-version: ${{ inputs.python-version }}
 
-      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+      - name: Bump setup
+        id: setup
+        uses: ./.github/actions/bump-setup
         with:
-          version: ${{ inputs.uv-version }}
+          app-id: ${{ inputs.app-id }}
+          app-private-key: ${{ secrets.app-private-key }}
+          uv-version: ${{ inputs.uv-version }}
 
       # ------------------------------------------------------------------
       # Fragment detection — must run AFTER checkout (needs the source
@@ -251,11 +242,8 @@ jobs:
         env:
           NEXT: ${{ steps.next-version.outputs.next }}
           DEFAULT_BRANCH: ${{ inputs.default-branch }}
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ steps.setup.outputs.token }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
           # Stage the pyproject.toml version bump and CHANGELOG.md.
           # towncrier build already stages fragment deletions via git rm,
           # so changelog.d/ does not need (and cannot be passed to) git add.
