@@ -47,6 +47,7 @@ runs:
       with:
         app-id: ${{ inputs.app-id }}
         private-key: ${{ inputs.app-private-key }}
+        repositories: ${{ github.repository }}
 
     - name: Check out calling repository with bump credential
       if: inputs.checkout-token == 'true'

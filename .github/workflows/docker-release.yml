@@ -18,17 +18,18 @@ on:
         type: string
         default: ""
 
-permissions:
-  contents: read
-  packages: write         # required to push images to ghcr.io
-  id-token: write         # provenance/SBOM attestation signing (provenance: mode=max, sbom: true)
-  attestations: write
-  security-events: write  # required to upload the Trivy SARIF to Code Scanning
+permissions: {}
 
 jobs:
   publish:
     name: Publish
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write         # required to push images to ghcr.io
+      id-token: write         # provenance/SBOM attestation signing (provenance: mode=max, sbom: true)
+      attestations: write
+      security-events: write  # required to upload the Trivy SARIF to Code Scanning
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:

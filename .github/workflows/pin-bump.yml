@@ -76,11 +76,6 @@ jobs:
       contents: write        # push bump branch
       pull-requests: write   # gh pr create
     steps:
-      # Mint the caller-supplied bump token, check out the calling repo
-      # with it (so the persisted credential carries the push identity),
-      # check out the workflow-library repo for scripts/pin-bump.py,
-      # install uv, and set the bot git identity. Shared prelude with the
-      # other bump/release workflows.
       - name: Bump setup
         id: setup
         uses: ./.github/actions/bump-setup
