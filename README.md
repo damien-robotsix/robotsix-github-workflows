@@ -464,6 +464,29 @@ jobs:
       app-private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}  # GitHub App private key
 ```
 
+## `dependabot-auto-merge.yml` — caller template
+
+Consumer repos add a wrapper workflow (e.g. `.github/workflows/dependabot-auto-merge.yml`)
+that triggers on `pull_request`:
+
+```yaml
+name: Dependency Bot Auto-Merge
+
+on:
+  pull_request:
+
+jobs:
+  auto-merge:
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/dependabot-auto-merge.yml@<sha>
+```
+
+The workflow declares no inputs and no secrets.  The calling job needs
+`contents: write` and `pull-requests: write` permissions, which the reusable
+workflow requests on the `auto-merge` job.  It auto-merges PRs from
+Dependabot, Renovate, and robotsix-mill bot actors, labels them
+`Skip-Changelog`, and squash-merges via `gh pr merge --auto --squash
+--delete-branch` with a fallback for repos without branch protection.
+
 ## `lint-workflows.yml` — caller template
 
 Lints the repo's own workflow files (actionlint + zizmor) and validates that
@@ -482,7 +505,7 @@ jobs:
     with:
       run-actionlint: true
       run-zizmor: true
-      # sarif-workflows: "python-ci.yml codeql.yml scan-container.yml"  # default
+      # sarif-workflows: "codeql.yml scan-container.yml"  # default
 ```
 
 ## `pin-bump.yml` — caller template
@@ -526,6 +549,42 @@ jobs:
     secrets:
       app-private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}  # GitHub App private key
 ```
+
+## `python-security.yml` — caller template
+
+Consumer repos add a wrapper workflow (e.g. `.github/workflows/python-security.yml`)
+that triggers on `push`/`pull_request` targeting `main`:
+
+```yaml
+name: Python Security
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  security:
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/python-security.yml@<sha>
+    # All inputs are optional — defaults shown:
+    # with:
+    #   python-version: "3.14"
+    #   uv-version: "0.8.15"
+    #   install-extras: "tracing"
+    #   runs-on: "ubuntu-latest"
+    #   run-trufflehog: true
+    #   trufflehog-pr-diff: false
+    #   trufflehog-extra-args: ""
+    #   run-pip-audit: true
+    #   pip-audit-requirements-file: ""
+    #   pip-audit-ignore-packages: ""
+    #   pip-audit-ignore-vulns: ""
+```
+
+The workflow requires only `contents: read` (declared in the reusable workflow).
+It runs a single `security` job that executes TruffleHog secret scanning,
+pip-audit dependency vulnerability auditing, and uploads a CycloneDX SBOM as
+the `sbom` artifact.
 
 ## Branch protection
 
