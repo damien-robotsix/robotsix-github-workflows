@@ -1,5 +1,6 @@
 ## 0.0.0 (unreleased)
 
+- Add `ci.yml` caller workflow — dogfoods `lint-workflows.yml` (actionlint + zizmor), runs the config-ownership integration test, and validates workflow YAML schema via `mpalmer/action-validator` on every push to `main` and every pull request.
 - README: add missing `python-security.yml` and `dependabot-auto-merge.yml` caller-template sections, and fix stale `sarif-workflows` default comment in `lint-workflows.yml` section
 - Move periodic agent configs from `.robotsix-mill/` root into `.robotsix-mill/periodic/*.yaml` files to match the mill periodic loader convention.
 - Bootstrap `.robotsix-mill/` periodic workflow presence files for `audit`, `health`, `survey`, `changelog_autofill`, `repo_description_sync`, `completeness_check`, and `copy_paste`.
