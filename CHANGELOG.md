@@ -1,5 +1,6 @@
 ## 0.0.0 (unreleased)
 
+- Remove stale `schedule` and `workflow_dispatch` triggers from `pin-bump-sweep.yml` — the only job is gated on `workflow_call`, so these triggers were dead code. Add `self-ci.yml` to run the orphaned test suites (`test-pin-bump.py`, `test-config-ownership-check.sh`) and validate the repo against its own lint and baseline standards.
 - Replace empty `repos: []` in `.pre-commit-config.yaml` with canonical hook set: `actionlint` (workflow syntax/expression validation), `yamllint` (YAML formatting), and `shellcheck` (shell script linting in `run:` blocks).
 - Extracted inline Python from `config-ownership-check.yml` and `lint-workflows.yml` into
   dedicated scripts (`config_ownership_check.py`, `lint_sarif_permissions.py`) so the
