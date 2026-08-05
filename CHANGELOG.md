@@ -1,6 +1,17 @@
 ## 0.0.0 (unreleased)
 
 - Replace empty `repos: []` in `.pre-commit-config.yaml` with canonical hook set: `actionlint` (workflow syntax/expression validation), `yamllint` (YAML formatting), and `shellcheck` (shell script linting in `run:` blocks).
+- Extracted inline Python from `config-ownership-check.yml` and `lint-workflows.yml` into
+  dedicated scripts (`config_ownership_check.py`, `lint_sarif_permissions.py`) so the
+  logic is testable and the workflow YAML stays lean.  Updated the integration test for
+  config-ownership to call the shared module instead of a stale heredoc copy.
+- Added `tests/test-lint-sarif-permissions.py` (19 tests covering SARIF-upload
+  permission validation) and `tests/test-baseline-check.sh` (AGENT.md and LICENSE
+  checks) to close test-coverage gaps for the fleet's own CI gates.
+- Moved Branch Protection deep-dive into `docs/branch-protection.md` and added
+  `docs/workflow-reference.md` (consolidated input/default/secret reference for all
+  16 reusable workflows).  Kept README.md as a browsable overview with links into
+  the docs directory.
 - README: add missing `python-security.yml` and `dependabot-auto-merge.yml` caller-template sections, and fix stale `sarif-workflows` default comment in `lint-workflows.yml` section
 - Move periodic agent configs from `.robotsix-mill/` root into `.robotsix-mill/periodic/*.yaml` files to match the mill periodic loader convention.
 - Bootstrap `.robotsix-mill/` periodic workflow presence files for `audit`, `health`, `survey`, `changelog_autofill`, `repo_description_sync`, `completeness_check`, and `copy_paste`.
