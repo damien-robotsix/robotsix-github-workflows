@@ -75,6 +75,12 @@ No inputs.  No secrets.
 
 No secrets (uses `GITHUB_TOKEN` via caller workflow).
 
+The GHA layer cache (`cache-from`/`cache-to`) is enabled by default. For
+large images (multi-GB), exporting layers to the GHA cache API can add
+45–55 minutes per run — far longer than a cold build. Time both paths on
+the actual image before enabling the cache. Set `use-gha-cache: false` to
+skip the cache entirely.
+
 ## `docker-release.yml`
 
 | Input | Type | Default | Description |
