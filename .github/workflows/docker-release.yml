@@ -91,24 +91,7 @@ jobs:
       # supposed to ignore. `if: always()` so we still surface findings
       # in the Security tab even when the gate above trips.
       - name: Trivy vulnerability scan (SARIF for code-scanning)
-        # Only scan when an image was actually built. Without this guard, a
-        # failed build leaves scan-ref empty and trivy defaults to `.`, then
-        # fails with a misleading "could not parse reference: ." that masks
-        # the real build error.
-        if: ${{ always() && steps.scan-ref.outputs.image != '' }}
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        uses: ./.github/actions/trivy-sarif
         with:
           image-ref: ${{ steps.scan-ref.outputs.image }}
-          format: sarif
-          output: trivy-results.sarif
-          # No exit-code: this step is observability-only.
           ignore-unfixed: true
-
-      - name: Upload Trivy SARIF results
-        uses: github/codeql-action/upload-sarif@03e4368ac7daa2bd82b3e85262f3bf87ee112f57  # v3.36.0
-        if: ${{ always() && hashFiles('trivy-results.sarif') != '' }}
-        # Code-scanning upload is observability-only; a SARIF-upload auth
-        # failure (e.g. 401) must not gate the image publish.
-        continue-on-error: true
-        with:
-          sarif_file: trivy-results.sarif
