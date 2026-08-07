@@ -8,19 +8,9 @@ name: Pin Bump Sweep
 # in every affected repository so that all repos that share a dependency
 # receive the same SHA update in the same sweep.
 #
-# Scheduled weekly (Monday 06:00 UTC) and available for manual dispatch.
-# Also callable via workflow_call for programmatic triggering.
+# Callable via workflow_call for programmatic triggering.
 
 on:
-  schedule:
-    - cron: "0 6 * * 1"
-  workflow_dispatch:
-    inputs:
-      owner:
-        description: GitHub org/owner whose repos are swept.
-        required: false
-        type: string
-        default: "damien-robotsix"
   workflow_call:
     inputs:
       owner:
@@ -66,6 +56,8 @@ jobs:
         with:
           app-id: ${{ inputs.app-id }}
           private-key: ${{ secrets.app-private-key }}
+          permission-contents: write
+          permission-pull-requests: write
 
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
