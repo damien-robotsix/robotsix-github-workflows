@@ -43,3 +43,9 @@ job step with `${{ inputs.x != '' && inputs.x || format('ghcr.io/{0}',
 github.repository) }}`.  GitHub rejects dynamic defaults in `workflow_call`
 inputs as an "Invalid workflow file" error, which causes every caller run on
 that branch to fail immediately.
+
+### Rule 6 — Reusable-workflow Python must live in `scripts/*.py` as importable modules, never inline `python3 << 'PYEOF'` heredocs
+
+Workflows invoke `python3 scripts/<name>.py` and tests import the same
+module, so test coverage always exercises the live logic and the workflow
+cannot drift from it.
