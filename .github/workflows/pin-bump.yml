@@ -87,7 +87,7 @@ jobs:
       # persisted credential carries the correct identity for git push).
       # persist-credentials intentionally defaults to true here — this
       # job must push the bump branch.
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
         with:
           token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0
@@ -95,7 +95,7 @@ jobs:
       # Checkout the workflow-library repo to get scripts/pin-bump.py.
       # The script is small, stable utility code; tracking main is
       # acceptable here (unlike action pins which must be SHA-locked).
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
         with:
           repository: damien-robotsix/robotsix-github-workflows
           path: _workflow-lib

@@ -86,7 +86,7 @@ jobs:
       # other workflow in this repo, we do NOT set
       # persist-credentials: false — this workflow MUST push commits
       # and tags (the dedicated credential is the whole point).
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
         with:
           token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0
