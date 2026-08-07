@@ -67,29 +67,18 @@ jobs:
       contents: write       # push bump branch
       pull-requests: write  # gh pr create
     steps:
-      - name: Mint GitHub App installation token
-        id: app-token
-        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349  # v2.2.2
+      # Mint the caller-supplied bump token (only a GitHub App token can
+      # trigger CI on the push — GITHUB_TOKEN suppresses it to prevent
+      # recursion), check out with it so the persisted credential carries
+      # the correct identity for git push, install uv, and set the bot git
+      # identity. Shared with the other bump/release workflows.
+      - name: Bump setup
+        id: setup
+        uses: ./.github/actions/bump-setup
         with:
           app-id: ${{ inputs.app-id }}
-          private-key: ${{ secrets.app-private-key }}
-
-      # Checkout with the caller-supplied bump token so the persisted
-      # credential carries the correct identity for git push.
-      # Unlike most workflows in this repo, persist-credentials is
-      # intentionally omitted (defaults to true) — this job must push
-      # the bump branch.
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
-        with:
-          token: ${{ steps.app-token.outputs.token }}
-          fetch-depth: 0
-
-      # uv lock resolves package metadata without requiring a Python
-      # interpreter installation, so no actions/setup-python step is
-      # needed here.
-      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
-        with:
-          version: ${{ inputs.uv-version }}
+          app-private-key: ${{ secrets.app-private-key }}
+          uv-version: ${{ inputs.uv-version }}
 
       - name: Upgrade first-party pins
         env:
@@ -114,8 +103,6 @@ jobs:
           BUMP_BRANCH: ${{ inputs.bump-branch }}
           DEFAULT_BRANCH: ${{ inputs.default-branch }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -B "$BUMP_BRANCH"
           git add uv.lock
           git commit -m "chore: bump first-party pins"
@@ -124,7 +111,7 @@ jobs:
       - name: Open or reuse PR
         if: steps.diff.outputs.changed == 'true'
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ steps.setup.outputs.token }}
           BUMP_BRANCH: ${{ inputs.bump-branch }}
           DEFAULT_BRANCH: ${{ inputs.default-branch }}
         run: |
