@@ -14,6 +14,7 @@
   16 reusable workflows).  Kept README.md as a browsable overview with links into
   the docs directory.
 - Extract the duplicated bump/release prelude (GitHub App token minting, credentialed checkout, `astral-sh/setup-uv` install, git identity) into a shared composite action `.github/actions/bump-setup/action.yml`. `deps-bump.yml`, `pin-bump.yml`, `auto-release.yml`, and `pin-bump-sweep.yml` now reference it (a `bump-setup` step with `id: setup`, exposing the minted token via `steps.setup.outputs.token`) instead of copy-pasting the same `~80` lines, so a token/action/version-pin update now lands in one place.
+- `python-ci.yml`: run `coverage combine` before uploading the `coverage-data` artifact so the `.coverage` database is always included — fixes `No data to report.` failures in `python-coverage-comment-action` for consumers with `[tool.coverage.run] parallel = true`.
 - README: add missing `python-security.yml` and `dependabot-auto-merge.yml` caller-template sections, and fix stale `sarif-workflows` default comment in `lint-workflows.yml` section
 - Move periodic agent configs from `.robotsix-mill/` root into `.robotsix-mill/periodic/*.yaml` files to match the mill periodic loader convention.
 - Bootstrap `.robotsix-mill/` periodic workflow presence files for `audit`, `health`, `survey`, `changelog_autofill`, `repo_description_sync`, `completeness_check`, and `copy_paste`.
