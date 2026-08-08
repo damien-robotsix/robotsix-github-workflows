@@ -60,10 +60,6 @@ jobs:
       contents: read
     timeout-minutes: 60
     steps:
-      # Mint the caller-supplied sweep token, check out the calling repo
-      # WITHOUT a credentialed checkout (the sweep script talks to the
-      # GitHub API via SWEEP_TOKEN rather than git credentials), install
-      # uv, and set the bot git identity.
       - name: Bump setup
         id: setup
         uses: ./.github/actions/bump-setup

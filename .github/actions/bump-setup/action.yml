@@ -34,6 +34,14 @@ inputs:
     description: Path for the additionally checked-out repository.
     required: false
     default: ""
+  repositories:
+    description: >
+      Comma-separated list of repositories to scope the token to.
+      When empty (default), the token is fleet-wide (required by
+      pin-bump-sweep for cross-repo PRs). Single-repo callers pass
+      `${{ github.repository }}` to restrict the token scope.
+    required: false
+    default: ""
 outputs:
   token:
     description: The minted GitHub App installation token.
@@ -47,6 +55,12 @@ runs:
       with:
         app-id: ${{ inputs.app-id }}
         private-key: ${{ inputs.app-private-key }}
+        repositories: ${{ inputs.repositories }}
+        # Limit the minted token to exactly the permissions the
+        # bump/release workflows need: push branches/tags and
+        # open/merge PRs.
+        permission-contents: write
+        permission-pull-requests: write
 
     - name: Check out calling repository with bump credential
       if: inputs.checkout-token == 'true'

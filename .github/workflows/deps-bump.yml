@@ -67,11 +67,6 @@ jobs:
       contents: write       # push bump branch
       pull-requests: write  # gh pr create
     steps:
-      # Mint the caller-supplied bump token (only a GitHub App token can
-      # trigger CI on the push — GITHUB_TOKEN suppresses it to prevent
-      # recursion), check out with it so the persisted credential carries
-      # the correct identity for git push, install uv, and set the bot git
-      # identity. Shared with the other bump/release workflows.
       - name: Bump setup
         id: setup
         uses: ./.github/actions/bump-setup
@@ -79,6 +74,7 @@ jobs:
           app-id: ${{ inputs.app-id }}
           app-private-key: ${{ secrets.app-private-key }}
           uv-version: ${{ inputs.uv-version }}
+          repositories: ${{ github.repository }}
 
       - name: Upgrade first-party pins
         env:
