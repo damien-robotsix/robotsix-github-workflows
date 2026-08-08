@@ -165,14 +165,25 @@ jobs:
 
           [ "$FAIL" -eq 0 ] || exit 1
 
-      # Repos that use towncrier for changelog management must have a
-      # changelog.d/ fragment directory and a [tool.towncrier] section in
-      # pyproject.toml.  This check is auto-detected: it only fires when
-      # pyproject.toml exists, skipping repos that don't use Python.
-      - name: Check changelog.d/ and towncrier config
+      # Changelog management. release-please is the fleet standard
+      # (robotsix-standards release-please.md); towncrier is superseded but
+      # still in use by repos that have not migrated, so both are accepted.
+      #
+      # A repo carrying release-please-config.json is on release-please, which
+      # generates the changelog from conventional commits and has no fragment
+      # directory at all — requiring changelog.d/ there would make migrating
+      # off towncrier impossible, since this gate would fail the very commit
+      # that removes it.
+      - name: Check changelog management
         run: |
           if [ ! -f pyproject.toml ]; then
-            echo "pyproject.toml not found — skipping towncrier check"
+            echo "pyproject.toml not found — skipping changelog check"
+            exit 0
+          fi
+
+          if [ -f release-please-config.json ]; then
+            echo "release-please-config.json found — changelog is generated from"
+            echo "conventional commits; towncrier layout not required."
             exit 0
           fi
 
