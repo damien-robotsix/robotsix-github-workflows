@@ -42,6 +42,16 @@ inputs:
       `${{ github.repository }}` to restrict the token scope.
     required: false
     default: ""
+  permission-contents:
+    description: >
+      Permission scope for repository contents (push branches/tags).
+    required: false
+    default: "write"
+  permission-pull-requests:
+    description: >
+      Permission scope for pull requests (create/merge PRs).
+    required: false
+    default: "write"
 outputs:
   token:
     description: The minted GitHub App installation token.
@@ -56,11 +66,8 @@ runs:
         app-id: ${{ inputs.app-id }}
         private-key: ${{ inputs.app-private-key }}
         repositories: ${{ inputs.repositories }}
-        # Limit the minted token to exactly the permissions the
-        # bump/release workflows need: push branches/tags and
-        # open/merge PRs.
-        permission-contents: write
-        permission-pull-requests: write
+        permission-contents: ${{ inputs.permission-contents }}
+        permission-pull-requests: ${{ inputs.permission-pull-requests }}
 
     - name: Check out calling repository with bump credential
       if: inputs.checkout-token == 'true'

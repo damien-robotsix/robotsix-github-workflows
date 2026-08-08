@@ -44,6 +44,20 @@ on:
           (+ pull-requests:write for the protected-branch fallback).
         required: true
         type: string
+      permission-contents:
+        description: >
+          Permission scope for the minted token's repository contents
+          (push release commit and tag).
+        required: false
+        type: string
+        default: "write"
+      permission-pull-requests:
+        description: >
+          Permission scope for the minted token's pull requests
+          (create/merge PRs in the protected-branch fallback path).
+        required: false
+        type: string
+        default: "write"
       default-branch:
         description: >
           Name of the default branch (e.g. "main" or "master").
@@ -67,12 +81,8 @@ jobs:
     name: Release
     runs-on: ${{ inputs.runs-on }}
     permissions:
-      # contents:write is required to push the release commit and tag
-      # (and to create the release branch in the PR fallback path).
-      contents: write
-      # pull-requests:write is required for gh pr create + gh pr merge
-      # in the protected-branch fallback path.
-      pull-requests: write
+      contents: write       # push release commit and tag (+ release branch in PR fallback)
+      pull-requests: write  # gh pr create + gh pr merge in protected-branch fallback
     steps:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
@@ -86,6 +96,8 @@ jobs:
           app-private-key: ${{ secrets.app-private-key }}
           uv-version: ${{ inputs.uv-version }}
           repositories: ${{ github.repository }}
+          permission-contents: ${{ inputs.permission-contents }}
+          permission-pull-requests: ${{ inputs.permission-pull-requests }}
 
       # ------------------------------------------------------------------
       # Fragment detection — must run AFTER checkout (needs the source
