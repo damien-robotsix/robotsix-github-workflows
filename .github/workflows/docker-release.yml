@@ -28,7 +28,7 @@ jobs:
       contents: read
       packages: write         # required to push images to ghcr.io
       id-token: write         # provenance/SBOM attestation signing (provenance: mode=max, sbom: true)
-      attestations: write
+      attestations: write     # provenance/SBOM attestation signing
       security-events: write  # required to upload the Trivy SARIF to Code Scanning
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4

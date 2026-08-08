@@ -58,6 +58,20 @@ on:
           pull-requests:write.
         required: true
         type: string
+      permission-contents:
+        description: >
+          Permission scope for the minted token's repository contents
+          (push bump branch).
+        required: false
+        type: string
+        default: "write"
+      permission-pull-requests:
+        description: >
+          Permission scope for the minted token's pull requests
+          (create/update PRs).
+        required: false
+        type: string
+        default: "write"
     secrets:
       app-private-key:
         description: >
@@ -84,6 +98,8 @@ jobs:
           app-private-key: ${{ secrets.app-private-key }}
           uv-version: ${{ inputs.uv-version }}
           repositories: ${{ github.repository }}
+          permission-contents: ${{ inputs.permission-contents }}
+          permission-pull-requests: ${{ inputs.permission-pull-requests }}
           checkout-repository: damien-robotsix/robotsix-github-workflows
           checkout-path: _workflow-lib
 
