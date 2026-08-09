@@ -51,6 +51,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: pin-bump-sweep-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   sweep:
     name: Coherent-set sweep
