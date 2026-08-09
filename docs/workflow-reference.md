@@ -10,6 +10,8 @@ this repository.
 | `app-id` | string | — | GitHub App ID for release authentication. |
 | `python-version` | string | `3.14` | Python version for the release job. |
 | `uv-version` | string | `0.8.15` | uv version for the release job. |
+| `runs-on` | string | `ubuntu-latest` | Runner label for the release job. |
+| `default-branch` | string | `main` | Name of the default branch (e.g. "main" or "master"). |
 
 | Secret | Required | Description |
 |---|---|---|
@@ -34,7 +36,7 @@ No inputs.  No secrets.
 |---|---|---|---|
 | `languages` | string | `python` | Languages to analyze. |
 | `queries` | string | `security-and-quality` | Query suite. |
-| `config-file` | string | `.github/codeql/codeql-config.yml` | Config file path. |
+| `config-file` | string | `""` | Path to a repo-local CodeQL configuration file (e.g. .github/codeql/codeql-config.yml). Empty = no config file. |
 | `runs-on` | string | `ubuntu-latest` | Runner label. |
 
 No secrets.
@@ -60,6 +62,9 @@ No inputs.  No secrets.
 |---|---|---|---|
 | `packages` | string | — | Space-separated first-party package names (subset of `[tool.uv.sources]`). |
 | `app-id` | string | — | GitHub App ID for PR creation. |
+| `uv-version` | string | `0.8.15` | uv version to install. |
+| `default-branch` | string | `main` | Base branch for the PR and the git push target. |
+| `bump-branch` | string | `deps-bump/first-party` | Branch to force-push the bump commit to. |
 
 | Secret | Required | Description |
 |---|---|---|
@@ -106,6 +111,9 @@ No secrets.
 |---|---|---|---|
 | `packages` | string | — | Space-separated package names (empty = all git-sourced). |
 | `app-id` | string | — | GitHub App ID for PR creation. |
+| `uv-version` | string | `0.8.15` | uv version to install. |
+| `default-branch` | string | `main` | Base branch for the PR and git push target. |
+| `bump-branch` | string | `pin-bump/first-party` | Branch to force-push the bump commit to. |
 
 | Secret | Required | Description |
 |---|---|---|
@@ -117,6 +125,7 @@ No secrets.
 |---|---|---|---|
 | `owner` | string | `damien-robotsix` | GitHub org/owner to sweep. |
 | `app-id` | string | — | GitHub App ID for PR creation. |
+| `uv-version` | string | `0.8.15` | uv version to install. |
 
 | Secret | Required | Description |
 |---|---|---|
@@ -151,7 +160,7 @@ No secrets.
 | `docs-install-args` | string | `--group docs` | uv sync args for docs deps. |
 | `python-version` | string | `3.14` | Python version. |
 | `uv-version` | string | `0.8.15` | uv version. |
-| `retries` | string | `4` | mkdocs deploy retries. |
+| `retries` | string | `4` | Number of dependency-install attempts in the retry loop. |
 
 No secrets.
 
@@ -178,5 +187,6 @@ No secrets.
 | Input | Type | Default | Description |
 |---|---|---|---|
 | `image-name` | string | `ghcr.io/<owner>/<repo>:main` | Image to rescan. |
+| `ignore-unfixed` | boolean | `false` | Skip CVEs with no upstream fix. Defaults to false so all findings surface in the Security tab. |
 
 No secrets (caller needs `security-events: write` and `contents: read`).
