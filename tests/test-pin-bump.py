@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import base64
 import importlib.util
+import json
 import subprocess
 import textwrap
 from pathlib import Path
@@ -25,6 +27,11 @@ parse_git_sources = _pin_bump.parse_git_sources
 rewrite_revs = _pin_bump.rewrite_revs
 resolve_default_branch_head = _pin_bump.resolve_default_branch_head
 per_repo = _pin_bump.per_repo
+_collect_fleet_pins = _pin_bump._collect_fleet_pins
+_resolve_latest_shas = _pin_bump._resolve_latest_shas
+_compute_repo_bumps = _pin_bump._compute_repo_bumps
+_apply_pin_bump = _pin_bump._apply_pin_bump
+sweep = _pin_bump.sweep
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -429,3 +436,530 @@ class TestPerRepoIntegration:
 
         exit_code = per_repo(pyproject)
         assert exit_code == 0
+
+
+# ---------------------------------------------------------------------------
+# _compute_repo_bumps
+# ---------------------------------------------------------------------------
+
+
+class TestComputeRepoBumps:
+    """Unit tests for the pure helper _compute_repo_bumps."""
+
+    def test_empty_dep_map(self) -> None:
+        """Empty dep_map produces empty repo_bumps."""
+        assert _compute_repo_bumps({}, {}) == {}
+
+    def test_all_current(self) -> None:
+        """When all revs match latest, result is empty."""
+        sha = "a" * 40
+        dep_map = {"https://example.com/dep.git": [("repo1", "pkg1", sha)]}
+        latest_map = {"https://example.com/dep.git": sha}
+        assert _compute_repo_bumps(dep_map, latest_map) == {}
+
+    def test_some_stale(self) -> None:
+        """Stale pins appear in the result; current ones do not."""
+        old = "0" * 40
+        new = "f" * 40
+        dep_map = {
+            "https://example.com/dep.git": [
+                ("repo1", "pkg1", old),
+                ("repo2", "pkg1", new),
+            ]
+        }
+        latest_map = {"https://example.com/dep.git": new}
+        result = _compute_repo_bumps(dep_map, latest_map)
+        assert result == {"repo1": [("pkg1", new)]}
+
+    def test_multiple_git_urls(self) -> None:
+        """Each git URL is resolved independently."""
+        old_a, new_a = "0" * 40, "f" * 40
+        old_b, new_b = "1" * 40, "e" * 40
+        dep_map = {
+            "https://a.git": [("repo1", "alpha", old_a)],
+            "https://b.git": [("repo2", "beta", old_b)],
+        }
+        latest_map = {"https://a.git": new_a, "https://b.git": new_b}
+        result = _compute_repo_bumps(dep_map, latest_map)
+        assert result == {"repo1": [("alpha", new_a)], "repo2": [("beta", new_b)]}
+
+    def test_multiple_repos_same_git_url(self) -> None:
+        """Multiple repos pinned to the same git URL all get the same new SHA."""
+        old = "0" * 40
+        new = "f" * 40
+        dep_map = {
+            "https://example.com/dep.git": [
+                ("repo1", "pkg1", old),
+                ("repo2", "pkg1", old),
+                ("repo3", "pkg1", old),
+            ]
+        }
+        latest_map = {"https://example.com/dep.git": new}
+        result = _compute_repo_bumps(dep_map, latest_map)
+        assert result == {
+            "repo1": [("pkg1", new)],
+            "repo2": [("pkg1", new)],
+            "repo3": [("pkg1", new)],
+        }
+
+    def test_mixed_current_and_stale_across_repos(self) -> None:
+        """Some repos are current, others stale — only stale appear."""
+        old = "0" * 40
+        new = "f" * 40
+        dep_map = {
+            "https://example.com/dep.git": [
+                ("repo1", "pkg1", old),
+                ("repo2", "pkg1", new),
+                ("repo3", "pkg1", old),
+            ]
+        }
+        latest_map = {"https://example.com/dep.git": new}
+        result = _compute_repo_bumps(dep_map, latest_map)
+        assert result == {"repo1": [("pkg1", new)], "repo3": [("pkg1", new)]}
+        assert "repo2" not in result
+
+
+# ---------------------------------------------------------------------------
+# _resolve_latest_shas
+# ---------------------------------------------------------------------------
+
+
+class TestResolveLatestShas:
+    """Tests for _resolve_latest_shas."""
+
+    def test_resolves_each_unique_url_once(
+        self, monkeypatch, capsys
+    ) -> None:
+        """Each unique git URL is resolved exactly once via
+        resolve_default_branch_head."""
+        sha_a = "a" * 40
+        sha_b = "b" * 40
+
+        calls: list[str] = []
+
+        def fake_resolve(url: str) -> str:
+            calls.append(url)
+            return sha_a if "a.git" in url else sha_b
+
+        monkeypatch.setattr(_pin_bump, "resolve_default_branch_head", fake_resolve)
+
+        dep_map = {
+            "https://example.com/a.git": [
+                ("repo1", "alpha", "0" * 40),
+                ("repo2", "alpha", "1" * 40),
+            ],
+            "https://example.com/b.git": [("repo3", "beta", "2" * 40)],
+        }
+        result = _resolve_latest_shas(dep_map)
+
+        assert len(calls) == 2
+        assert "https://example.com/a.git" in calls
+        assert "https://example.com/b.git" in calls
+        assert result == {
+            "https://example.com/a.git": sha_a,
+            "https://example.com/b.git": sha_b,
+        }
+
+
+# ---------------------------------------------------------------------------
+# _collect_fleet_pins
+# ---------------------------------------------------------------------------
+
+
+class TestCollectFleetPins:
+    """Tests for _collect_fleet_pins."""
+
+    def test_no_repos(self, monkeypatch) -> None:
+        """When gh repo list returns no repos, dep_map is empty."""
+
+        def fake_run(*args: str, **kwargs: object) -> subprocess.CompletedProcess[str]:
+            if args[:3] == ("gh", "repo", "list"):
+                return subprocess.CompletedProcess(
+                    args=args, returncode=0, stdout="[]", stderr=""
+                )
+            return subprocess.run(args, text=True, check=True, **kwargs)  # type: ignore[call-overload,no-any-return]
+
+        monkeypatch.setattr(_pin_bump, "run", fake_run)
+        result = _collect_fleet_pins("test-org", {"GH_TOKEN": "fake"})
+        assert result == {}
+
+    def test_repo_without_pyproject(self, monkeypatch) -> None:
+        """Repos without pyproject.toml are silently skipped."""
+
+        def fake_run(*args: str, **kwargs: object) -> subprocess.CompletedProcess[str]:
+            if args[:3] == ("gh", "repo", "list"):
+                return subprocess.CompletedProcess(
+                    args=args,
+                    returncode=0,
+                    stdout=json.dumps([{"name": "no-pyproject"}]),
+                    stderr="",
+                )
+            return subprocess.run(args, text=True, check=True, **kwargs)  # type: ignore[call-overload,no-any-return]
+
+        def fake_gh(*args: str, **kwargs: object) -> str:
+            raise subprocess.CalledProcessError(1, ("gh",) + args)
+
+        monkeypatch.setattr(_pin_bump, "run", fake_run)
+        monkeypatch.setattr(_pin_bump, "gh", fake_gh)
+        result = _collect_fleet_pins("test-org", {"GH_TOKEN": "fake"})
+        assert result == {}
+
+    def test_repo_with_git_pins(self, monkeypatch) -> None:
+        """Git-sourced pins with 40-char revs are collected."""
+
+        sha = "d" * 40
+        toml_content = textwrap.dedent(f"""
+            [tool.uv.sources]
+            mypkg = {{ git = "https://github.com/org/dep.git", rev = "{sha}" }}
+        """).lstrip()
+
+        def fake_run(*args: str, **kwargs: object) -> subprocess.CompletedProcess[str]:
+            if args[:3] == ("gh", "repo", "list"):
+                return subprocess.CompletedProcess(
+                    args=args,
+                    returncode=0,
+                    stdout=json.dumps([{"name": "myrepo"}]),
+                    stderr="",
+                )
+            return subprocess.run(args, text=True, check=True, **kwargs)  # type: ignore[call-overload,no-any-return]
+
+        def fake_gh(*args: str, **kwargs: object) -> str:
+            return base64.b64encode(toml_content.encode()).decode()
+
+        monkeypatch.setattr(_pin_bump, "run", fake_run)
+        monkeypatch.setattr(_pin_bump, "gh", fake_gh)
+        result = _collect_fleet_pins("test-org", {"GH_TOKEN": "fake"})
+
+        expected_key = "https://github.com/org/dep.git"
+        assert expected_key in result
+        assert result[expected_key] == [("myrepo", "mypkg", sha)]
+
+    def test_short_rev_skipped(self, monkeypatch) -> None:
+        """Sources with a non-40-char rev (tag/branch) are skipped."""
+
+        toml_content = textwrap.dedent("""
+            [tool.uv.sources]
+            mypkg = { git = "https://github.com/org/dep.git", rev = "main" }
+        """).lstrip()
+
+        def fake_run(*args: str, **kwargs: object) -> subprocess.CompletedProcess[str]:
+            if args[:3] == ("gh", "repo", "list"):
+                return subprocess.CompletedProcess(
+                    args=args,
+                    returncode=0,
+                    stdout=json.dumps([{"name": "myrepo"}]),
+                    stderr="",
+                )
+            return subprocess.run(args, text=True, check=True, **kwargs)  # type: ignore[call-overload,no-any-return]
+
+        def fake_gh(*args: str, **kwargs: object) -> str:
+            return base64.b64encode(toml_content.encode()).decode()
+
+        monkeypatch.setattr(_pin_bump, "run", fake_run)
+        monkeypatch.setattr(_pin_bump, "gh", fake_gh)
+        result = _collect_fleet_pins("test-org", {"GH_TOKEN": "fake"})
+        assert result == {}
+
+    def test_multiple_repos(self, monkeypatch) -> None:
+        """Multiple repos are all enumerated."""
+        sha_a, sha_b = "a" * 40, "b" * 40
+
+        # We need different TOML per repo — track which repo is being fetched
+        repo_tomls = {
+            "repo1": textwrap.dedent(f"""
+                [tool.uv.sources]
+                alpha = {{ git = "https://github.com/org/dep.git", rev = "{sha_a}" }}
+            """).lstrip(),
+            "repo2": textwrap.dedent(f"""
+                [tool.uv.sources]
+                beta = {{ git = "https://github.com/org/dep.git", rev = "{sha_b}" }}
+            """).lstrip(),
+        }
+        fetch_order: list[str] = []
+
+        def fake_run(*args: str, **kwargs: object) -> subprocess.CompletedProcess[str]:
+            if args[:3] == ("gh", "repo", "list"):
+                return subprocess.CompletedProcess(
+                    args=args,
+                    returncode=0,
+                    stdout=json.dumps([{"name": "repo1"}, {"name": "repo2"}]),
+                    stderr="",
+                )
+            return subprocess.run(args, text=True, check=True, **kwargs)  # type: ignore[call-overload,no-any-return]
+
+        def fake_gh(*args: str, **kwargs: object) -> str:
+            # args[1] = "repos/<owner>/<repo>/contents/pyproject.toml"
+            repo = args[1].split("/")[2]
+            fetch_order.append(repo)
+            return base64.b64encode(repo_tomls[repo].encode()).decode()
+
+        monkeypatch.setattr(_pin_bump, "run", fake_run)
+        monkeypatch.setattr(_pin_bump, "gh", fake_gh)
+        result = _collect_fleet_pins("test-org", {"GH_TOKEN": "fake"})
+
+        assert len(fetch_order) == 2
+        key = "https://github.com/org/dep.git"
+        assert key in result
+        # Two pins collected across two repos
+        assert len(result[key]) == 2
+        assert ("repo1", "alpha", sha_a) in result[key]
+        assert ("repo2", "beta", sha_b) in result[key]
+
+
+# ---------------------------------------------------------------------------
+# _apply_pin_bump
+# ---------------------------------------------------------------------------
+
+
+class TestApplyPinBump:
+    """Tests for _apply_pin_bump."""
+
+    def _make_apply_mocks(
+        self, tmp_path: Path, monkeypatch, *, existing_pr: bool = False
+    ) -> tuple[list[str], list[str]]:
+        """Set up mocks for _apply_pin_bump and return command/gh_call logs.
+
+        Returns (subprocess_calls, gh_pr_calls).
+        """
+        subprocess_calls: list[tuple[str, ...]] = []
+        gh_calls: list[tuple[str, ...]] = []
+
+        def fake_run(
+            *args: str, **kwargs: object
+        ) -> subprocess.CompletedProcess[str]:
+            subprocess_calls.append(args)
+            if args[0] == "git" and args[1] == "clone":
+                # Create the fake cloned repo directory
+                dest = Path(args[-1])
+                dest.mkdir(parents=True, exist_ok=True)
+                (dest / "pyproject.toml").write_text(
+                    textwrap.dedent("""
+                        [tool.uv.sources]
+                        mypkg = { git = "https://github.com/org/dep.git", rev = "0000000000000000000000000000000000000000" }
+                    """).lstrip()
+                )
+            if args[0] == "git" and args[1] == "-C" and "rev-parse" in args:
+                return subprocess.CompletedProcess(
+                    args=args, returncode=0, stdout="main\n", stderr=""
+                )
+            if args[0] == "gh" and args[1] == "pr":
+                gh_calls.append(args)
+                if args[2] == "list":
+                    if existing_pr:
+                        return subprocess.CompletedProcess(
+                            args=args, returncode=0, stdout="42\n", stderr=""
+                        )
+                    raise subprocess.CalledProcessError(1, args)
+            return subprocess.CompletedProcess(
+                args=args, returncode=0, stdout="", stderr=""
+            )
+
+        monkeypatch.setattr(_pin_bump, "run", fake_run)
+        return subprocess_calls, gh_calls
+
+    def test_creates_new_pr(self, tmp_path: Path, monkeypatch) -> None:
+        """When no existing PR for the bump branch, a new PR is created."""
+        subprocess_calls, gh_calls = self._make_apply_mocks(
+            tmp_path, monkeypatch, existing_pr=False
+        )
+
+        bumps = [("mypkg", "f" * 40)]
+        _apply_pin_bump("test-org", "myrepo", bumps, "fake-token", str(tmp_path))
+
+        # Verify git clone happened
+        clone_calls = [c for c in subprocess_calls if c[0] == "git" and c[1] == "clone"]
+        assert len(clone_calls) == 1
+        assert clone_calls[0][-1] == str(tmp_path / "myrepo")
+
+        # Verify branch name
+        checkout_calls = [
+            c for c in subprocess_calls if c[0] == "git" and "checkout" in c
+        ]
+        assert any("pin-bump/sweep" in c for c in checkout_calls)
+
+        # Verify PR was created (not just list)
+        pr_create = [c for c in gh_calls if "create" in c]
+        assert len(pr_create) == 1
+
+    def test_reuses_existing_pr(self, tmp_path: Path, monkeypatch) -> None:
+        """When a PR already exists for the bump branch, no new PR is created."""
+        subprocess_calls, gh_calls = self._make_apply_mocks(
+            tmp_path, monkeypatch, existing_pr=True
+        )
+
+        bumps = [("mypkg", "f" * 40)]
+        _apply_pin_bump("test-org", "myrepo", bumps, "fake-token", str(tmp_path))
+
+        # PR list was called, but create was not
+        pr_list = [c for c in gh_calls if "list" in c]
+        pr_create = [c for c in gh_calls if "create" in c]
+        assert len(pr_list) == 1
+        assert len(pr_create) == 0
+
+    def test_skips_when_no_pyproject_after_clone(
+        self, tmp_path: Path, monkeypatch, capsys
+    ) -> None:
+        """When pyproject.toml is missing from the cloned repo, skip quietly."""
+
+        def fake_run(
+            *args: str, **kwargs: object
+        ) -> subprocess.CompletedProcess[str]:
+            if args[0] == "git" and args[1] == "clone":
+                dest = Path(args[-1])
+                dest.mkdir(parents=True, exist_ok=True)
+                # deliberately NOT creating pyproject.toml
+            if args[0] == "git" and args[1] == "-C" and "rev-parse" in args:
+                return subprocess.CompletedProcess(
+                    args=args, returncode=0, stdout="main\n", stderr=""
+                )
+            return subprocess.CompletedProcess(
+                args=args, returncode=0, stdout="", stderr=""
+            )
+
+        monkeypatch.setattr(_pin_bump, "run", fake_run)
+
+        bumps = [("mypkg", "f" * 40)]
+        _apply_pin_bump("test-org", "myrepo", bumps, "fake-token", str(tmp_path))
+
+        captured = capsys.readouterr()
+        assert "pyproject.toml not found" in captured.out
+
+
+# ---------------------------------------------------------------------------
+# sweep (orchestrator)
+# ---------------------------------------------------------------------------
+
+
+class TestSweep:
+    """Integration tests for the sweep() orchestrator."""
+
+    def test_no_git_pins_returns_zero(self, monkeypatch) -> None:
+        """When no repos have git-sourced pins, sweep returns 0."""
+
+        def fake_run(*args: str, **kwargs: object) -> subprocess.CompletedProcess[str]:
+            if args[:3] == ("gh", "repo", "list"):
+                return subprocess.CompletedProcess(
+                    args=args,
+                    returncode=0,
+                    stdout=json.dumps([{"name": "repo1"}]),
+                    stderr="",
+                )
+            return subprocess.run(args, text=True, check=True, **kwargs)  # type: ignore[call-overload,no-any-return]
+
+        def fake_gh(*args: str, **kwargs: object) -> str:
+            # Return a pyproject.toml with no git sources
+            toml = textwrap.dedent("""
+                [project]
+                name = "no-git-pins"
+            """).lstrip()
+            return base64.b64encode(toml.encode()).decode()
+
+        monkeypatch.setattr(_pin_bump, "run", fake_run)
+        monkeypatch.setattr(_pin_bump, "gh", fake_gh)
+        monkeypatch.setenv("SWEEP_TOKEN", "fake-token")
+
+        exit_code = sweep("test-org", "SWEEP_TOKEN")
+        assert exit_code == 0
+
+    def test_all_pins_current_returns_zero(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """When all fleet pins are already current, sweep returns 0."""
+        # Create a bare repo to resolve a real SHA
+        dep_bare, head = _create_bare_repo(tmp_path)
+
+        toml_content = textwrap.dedent(f"""
+            [tool.uv.sources]
+            mypkg = {{ git = "file://{dep_bare}", rev = "{head}" }}
+        """).lstrip()
+
+        def fake_run(*args: str, **kwargs: object) -> subprocess.CompletedProcess[str]:
+            if args[:3] == ("gh", "repo", "list"):
+                return subprocess.CompletedProcess(
+                    args=args,
+                    returncode=0,
+                    stdout=json.dumps([{"name": "consumer"}]),
+                    stderr="",
+                )
+            # Let resolve_default_branch_head use real git
+            if args[0] == "git" and args[1] == "ls-remote":
+                return subprocess.run(args, text=True, check=True, **kwargs)  # type: ignore[call-overload,no-any-return]
+            return subprocess.CompletedProcess(
+                args=args, returncode=0, stdout="", stderr=""
+            )
+
+        def fake_gh(*args: str, **kwargs: object) -> str:
+            return base64.b64encode(toml_content.encode()).decode()
+
+        monkeypatch.setattr(_pin_bump, "run", fake_run)
+        monkeypatch.setattr(_pin_bump, "gh", fake_gh)
+        monkeypatch.setenv("SWEEP_TOKEN", "fake-token")
+
+        exit_code = sweep("test-org", "SWEEP_TOKEN")
+        assert exit_code == 0
+
+    def test_stale_pins_trigger_bumps(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """When pins are stale, sweep detects bumps and processes repos."""
+        # Create a bare repo and get its HEAD
+        dep_bare, head = _create_bare_repo(tmp_path)
+
+        # Use a different (stale) rev in the pyproject
+        stale_rev = "0" * 40
+
+        toml_content = textwrap.dedent(f"""
+            [tool.uv.sources]
+            mypkg = {{ git = "file://{dep_bare}", rev = "{stale_rev}" }}
+        """).lstrip()
+
+        subprocess_calls: list[tuple[str, ...]] = []
+
+        def fake_run(*args: str, **kwargs: object) -> subprocess.CompletedProcess[str]:
+            subprocess_calls.append(args)
+            if args[:3] == ("gh", "repo", "list"):
+                return subprocess.CompletedProcess(
+                    args=args,
+                    returncode=0,
+                    stdout=json.dumps([{"name": "consumer"}]),
+                    stderr="",
+                )
+            if args[0] == "git" and args[1] == "ls-remote":
+                return subprocess.run(args, text=True, check=True, **kwargs)  # type: ignore[call-overload,no-any-return]
+            if args[0] == "git" and args[1] == "clone":
+                dest = Path(args[-1])
+                dest.mkdir(parents=True, exist_ok=True)
+                (dest / "pyproject.toml").write_text(toml_content)
+            if args[0] == "git" and args[1] == "-C" and "rev-parse" in args:
+                return subprocess.CompletedProcess(
+                    args=args, returncode=0, stdout="main\n", stderr=""
+                )
+            if args[0] == "gh" and args[1] == "pr" and args[2] == "list":
+                raise subprocess.CalledProcessError(1, args)
+            return subprocess.CompletedProcess(
+                args=args, returncode=0, stdout="", stderr=""
+            )
+
+        def fake_gh(*args: str, **kwargs: object) -> str:
+            return base64.b64encode(toml_content.encode()).decode()
+
+        monkeypatch.setattr(_pin_bump, "run", fake_run)
+        monkeypatch.setattr(_pin_bump, "gh", fake_gh)
+        monkeypatch.setenv("SWEEP_TOKEN", "fake-token")
+
+        exit_code = sweep("test-org", "SWEEP_TOKEN")
+        assert exit_code == 0
+
+        # Verify clone happened (meaning a bump was detected)
+        clone_calls = [
+            c for c in subprocess_calls if c[0] == "git" and c[1] == "clone"
+        ]
+        assert len(clone_calls) == 1
+
+        # Verify PR was created
+        pr_create = [
+            c
+            for c in subprocess_calls
+            if c[0] == "gh" and c[1] == "pr" and "create" in c
+        ]
+        assert len(pr_create) == 1
