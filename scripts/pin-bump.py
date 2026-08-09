@@ -26,6 +26,7 @@ Exit codes
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import re
@@ -200,21 +201,17 @@ def per_repo(pyproject_path: Path, filter_packages: list[str] | None = None) -> 
 
 
 # ---------------------------------------------------------------------------
-# Sweep (coherent-set) mode
+# Sweep (coherent-set) mode — helpers
 # ---------------------------------------------------------------------------
 
 
-def sweep(owner: str, token_env: str) -> int:
-    """Enumerate fleet repos, resolve pins once, open PRs for affected repos."""
-    token = os.environ.get(token_env)
-    if not token:
-        raise RuntimeError(
-            f"Environment variable {token_env} is not set. "
-            "The sweep needs a token with repo + workflow scope across all fleet repos."
-        )
+def _collect_fleet_pins(
+    owner: str, env: dict[str, str]
+) -> dict[str, list[tuple[str, str, str]]]:
+    """Enumerate fleet repos and collect all git-sourced pins.
 
-    env = {**os.environ, "GH_TOKEN": token}
-
+    Returns a mapping of ``git_url → [(repo_name, pkg_name, current_rev)]``.
+    """
     print(f"Enumerating non-archived, non-fork repos owned by {owner} …")
     repo_list_json = run(
         "gh",
@@ -233,8 +230,6 @@ def sweep(owner: str, token_env: str) -> int:
     repo_names = [r["name"] for r in json.loads(repo_list_json)]
     print(f"Found {len(repo_names)} repos.")
 
-    # Phase 1 — collect all git-sourced pins across the fleet
-    #           mapping: git_url → [(repo_name, pkg_name, current_rev)]
     dep_map: dict[str, list[tuple[str, str, str]]] = {}
 
     for repo in repo_names:
@@ -250,8 +245,6 @@ def sweep(owner: str, token_env: str) -> int:
         except subprocess.CalledProcessError:
             continue  # no pyproject.toml — skip
 
-        import base64
-
         toml_text = base64.b64decode(content).decode()
         try:
             data = tomllib.loads(toml_text)
@@ -266,129 +259,176 @@ def sweep(owner: str, token_env: str) -> int:
                 if rev and isinstance(rev, str) and len(rev) == 40:
                     dep_map.setdefault(spec["git"], []).append((repo, pkg, rev))
 
-    if not dep_map:
-        print("No git-sourced pins found across fleet.")
-        return 0
+    return dep_map
 
-    # Phase 2 — resolve the latest SHA for each unique git URL ONCE
+
+def _resolve_latest_shas(
+    dep_map: dict[str, list[tuple[str, str, str]]],
+) -> dict[str, str]:
+    """Resolve the latest HEAD SHA for each unique git URL.
+
+    Returns ``{git_url: sha}``.
+    """
     print(f"\nResolving latest SHAs for {len(dep_map)} unique git URLs …")
     latest_map: dict[str, str] = {}
     for git_url in dep_map:
         latest_map[git_url] = resolve_default_branch_head(git_url)
         print(f"  {git_url}: {latest_map[git_url][:8]}")
+    return latest_map
 
-    # Phase 3 — determine which repos need bumps
-    #            repo → [(pkg, new_sha)]
+
+def _compute_repo_bumps(
+    dep_map: dict[str, list[tuple[str, str, str]]],
+    latest_map: dict[str, str],
+) -> dict[str, list[tuple[str, str]]]:
+    """Determine which repos need pin bumps.
+
+    Returns ``{repo_name: [(pkg, new_sha)]}`` for repos with stale pins.
+    """
     repo_bumps: dict[str, list[tuple[str, str]]] = {}
     for git_url, pins in dep_map.items():
         new_sha = latest_map[git_url]
         for repo, pkg, current_rev in pins:
             if current_rev != new_sha:
                 repo_bumps.setdefault(repo, []).append((pkg, new_sha))
+    return repo_bumps
 
+
+def _apply_pin_bump(
+    owner: str,
+    repo: str,
+    bumps: list[tuple[str, str]],
+    token: str,
+    tmpdir: str,
+) -> None:
+    """Clone a repo, rewrite pin revs, lock, commit, push, and open a PR."""
+    print(f"\n--- Processing {owner}/{repo} ---")
+    repo_dir = Path(tmpdir) / repo
+    clone_url = f"https://x-access-token:{token}@github.com/{owner}/{repo}.git"
+    run("git", "clone", "--depth=1", clone_url, str(repo_dir))
+
+    # Determine default branch (should be main/master)
+    default_branch = run(
+        "git",
+        "-C",
+        str(repo_dir),
+        "rev-parse",
+        "--abbrev-ref",
+        "HEAD",
+        capture_output=True,
+    ).stdout.strip()
+
+    pyproject = repo_dir / "pyproject.toml"
+    if not pyproject.exists():
+        print(f"  pyproject.toml not found in cloned {repo} — skipping")
+        return
+
+    bump_dict = dict(bumps)
+    rewrite_revs(pyproject, bump_dict)
+
+    run("uv", "lock", cwd=str(repo_dir))
+
+    # Commit, push, PR
+    run("git", "-C", str(repo_dir), "config", "user.name", "github-actions[bot]")
+    run(
+        "git",
+        "-C",
+        str(repo_dir),
+        "config",
+        "user.email",
+        "github-actions[bot]@users.noreply.github.com",
+    )
+    bump_branch = "pin-bump/sweep"
+    run("git", "-C", str(repo_dir), "checkout", "-B", bump_branch)
+    run("git", "-C", str(repo_dir), "add", "pyproject.toml", "uv.lock")
+    run(
+        "git",
+        "-C",
+        str(repo_dir),
+        "commit",
+        "-m",
+        "chore: bump first-party git pin revs",
+    )
+    run("git", "-C", str(repo_dir), "push", "--force", "origin", bump_branch)
+
+    # Open or reuse PR
+    pr_env = {**os.environ, "GH_TOKEN": token}
+    existing = ""
+    try:
+        existing = run(
+            "gh",
+            "pr",
+            "list",
+            "--head",
+            bump_branch,
+            "--base",
+            default_branch,
+            "--json",
+            "number",
+            "-q",
+            ".[0].number",
+            capture_output=True,
+            env=pr_env,
+        ).stdout.strip()
+    except subprocess.CalledProcessError:
+        pass
+
+    if existing:
+        print(f"  PR #{existing} already open — updated by force-push.")
+    else:
+        run(
+            "gh",
+            "pr",
+            "create",
+            "--title",
+            "chore: bump first-party git pin revs",
+            "--body",
+            (
+                "Automated coherent-set pin bump sweep.\n\n"
+                "Updated pins:\n"
+                + "\n".join(f"- `{pkg}` → `{sha[:8]}`" for pkg, sha in bumps)
+            ),
+            "--base",
+            default_branch,
+            "--head",
+            bump_branch,
+            env=pr_env,
+        )
+        print(f"  PR created for {owner}/{repo}")
+
+
+# ---------------------------------------------------------------------------
+# Sweep (coherent-set) mode — orchestrator
+# ---------------------------------------------------------------------------
+
+
+def sweep(owner: str, token_env: str) -> int:
+    """Enumerate fleet repos, resolve pins once, open PRs for affected repos."""
+    token = os.environ.get(token_env)
+    if not token:
+        raise RuntimeError(
+            f"Environment variable {token_env} is not set. "
+            "The sweep needs a token with repo + workflow scope across all fleet repos."
+        )
+
+    env = {**os.environ, "GH_TOKEN": token}
+
+    dep_map = _collect_fleet_pins(owner, env)
+    if not dep_map:
+        print("No git-sourced pins found across fleet.")
+        return 0
+
+    latest_map = _resolve_latest_shas(dep_map)
+
+    repo_bumps = _compute_repo_bumps(dep_map, latest_map)
     if not repo_bumps:
         print("All fleet pins are already current.")
         return 0
 
-    # Phase 4 — clone, update, lock, PR for each affected repo
     print(f"\n{len(repo_bumps)} repo(s) need pin bumps.")
     with tempfile.TemporaryDirectory() as tmpdir:
         for repo, bumps in repo_bumps.items():
-            print(f"\n--- Processing {owner}/{repo} ---")
-            repo_dir = Path(tmpdir) / repo
-            clone_url = f"https://x-access-token:{token}@github.com/{owner}/{repo}.git"
-            run("git", "clone", "--depth=1", clone_url, str(repo_dir))
-
-            # Determine default branch (should be main/master)
-            default_branch = run(
-                "git",
-                "-C",
-                str(repo_dir),
-                "rev-parse",
-                "--abbrev-ref",
-                "HEAD",
-                capture_output=True,
-            ).stdout.strip()
-
-            pyproject = repo_dir / "pyproject.toml"
-            if not pyproject.exists():
-                print(f"  pyproject.toml not found in cloned {repo} — skipping")
-                continue
-
-            bump_dict = dict(bumps)
-            rewrite_revs(pyproject, bump_dict)
-
-            run("uv", "lock", cwd=str(repo_dir))
-
-            # Commit, push, PR
-            run(
-                "git", "-C", str(repo_dir), "config", "user.name", "github-actions[bot]"
-            )
-            run(
-                "git",
-                "-C",
-                str(repo_dir),
-                "config",
-                "user.email",
-                "github-actions[bot]@users.noreply.github.com",
-            )
-            bump_branch = "pin-bump/sweep"
-            run("git", "-C", str(repo_dir), "checkout", "-B", bump_branch)
-            run("git", "-C", str(repo_dir), "add", "pyproject.toml", "uv.lock")
-            run(
-                "git",
-                "-C",
-                str(repo_dir),
-                "commit",
-                "-m",
-                "chore: bump first-party git pin revs",
-            )
-            run("git", "-C", str(repo_dir), "push", "--force", "origin", bump_branch)
-
-            # Open or reuse PR
-            pr_env = {**os.environ, "GH_TOKEN": token}
-            existing = ""
-            try:
-                existing = run(
-                    "gh",
-                    "pr",
-                    "list",
-                    "--head",
-                    bump_branch,
-                    "--base",
-                    default_branch,
-                    "--json",
-                    "number",
-                    "-q",
-                    ".[0].number",
-                    capture_output=True,
-                    env=pr_env,
-                ).stdout.strip()
-            except subprocess.CalledProcessError:
-                pass
-
-            if existing:
-                print(f"  PR #{existing} already open — updated by force-push.")
-            else:
-                run(
-                    "gh",
-                    "pr",
-                    "create",
-                    "--title",
-                    "chore: bump first-party git pin revs",
-                    "--body",
-                    (
-                        "Automated coherent-set pin bump sweep.\n\n"
-                        "Updated pins:\n"
-                        + "\n".join(f"- `{pkg}` → `{sha[:8]}`" for pkg, sha in bumps)
-                    ),
-                    "--base",
-                    default_branch,
-                    "--head",
-                    bump_branch,
-                    env=pr_env,
-                )
-                print(f"  PR created for {owner}/{repo}")
+            _apply_pin_bump(owner, repo, bumps, token, tmpdir)
 
     return 0
 
