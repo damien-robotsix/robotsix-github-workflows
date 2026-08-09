@@ -33,12 +33,24 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
+      # Labelling is cosmetic; merging is the point. In a repo that has never
+      # defined the label, `gh pr edit --add-label` exits 1 ("'Skip-Changelog'
+      # not found") and used to fail the job *before* the merge step ran — so
+      # every dependency PR in that repo sat open forever (63 had piled up
+      # fleet-wide by 2026-08-09). Never let labelling block the merge.
+      #
+      # Self-healing via `gh label create` is deliberately NOT done here: it
+      # needs `issues: write`, and a permission added to a reusable workflow
+      # must be granted by every caller or the call dies with startup_failure
+      # and no logs. Create the label repo-side instead.
       - name: Label PR as Skip-Changelog
+        continue-on-error: true
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr edit "$PR_URL" --add-label "Skip-Changelog"
+          gh pr edit "$PR_URL" --add-label "Skip-Changelog" \
+            || echo "::warning::could not apply the Skip-Changelog label — continuing to merge"
 
       - name: Auto-merge dependency PR
         env:
