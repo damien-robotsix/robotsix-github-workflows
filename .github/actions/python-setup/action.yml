@@ -6,14 +6,14 @@ description: >
   test, tests).
 inputs:
   python-version:
+    description: Python version to set up.
     required: true
-    type: string
   uv-version:
+    description: uv version to install.
     required: true
-    type: string
   install-extras:
+    description: Extras to install (space-separated).
     required: false
-    type: string
     default: "tracing"
 runs:
   using: composite
