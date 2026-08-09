@@ -67,8 +67,15 @@ jobs:
 
           if [ "$rc" -eq 0 ]; then
             echo "Auto-merge queued (protected repo — will merge when checks pass)"
-          elif echo "$output" | grep -qi "protected branch rules not configured"; then
-            echo "No branch-protection rules detected — polling checks then merging directly"
+          # Two ways `--auto` is unavailable and we must merge ourselves:
+          #  - no branch protection, so there is nothing to queue behind;
+          #  - the repo has "Allow auto-merge" off. GitHub refuses to enable it
+          #    on PRIVATE repos on this plan, so PATCHing allow_auto_merge=true
+          #    silently stays false there (robotsix-invest, robotsix-website,
+          #    hexarchy). Both cases still poll checks before merging, so this
+          #    never merges a red PR.
+          elif echo "$output" | grep -qiE "protected branch rules not configured|not allowed for this repository|auto[- ]merge is not allowed|enablePullRequestAutoMerge"; then
+            echo "Auto-merge unavailable here — polling checks then merging directly"
             gh pr checks "$PR_URL" --watch --fail-fast
             gh pr merge --squash --delete-branch "$PR_URL"
           else
