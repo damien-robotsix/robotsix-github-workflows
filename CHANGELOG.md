@@ -1,6 +1,8 @@
 ## 0.0.0 (unreleased)
 
 - Add Rule 6 to `AGENT.md`: reusable-workflow Python must live in `scripts/*.py` as importable modules, never inline `python3 << 'PYEOF'` heredocs.
+- Restore `use-gha-cache` timing prose in `docs/workflow-reference.md` that was
+  dropped during the health-ticket docs split (the README pointer is now live again).
 - Replace empty `repos: []` in `.pre-commit-config.yaml` with canonical hook set: `actionlint` (workflow syntax/expression validation), `yamllint` (YAML formatting), and `shellcheck` (shell script linting in `run:` blocks).
 - Extracted inline Python from `config-ownership-check.yml` and `lint-workflows.yml` into
   dedicated scripts (`config_ownership_check.py`, `lint_sarif_permissions.py`) so the
