@@ -560,6 +560,17 @@ the `sbom` artifact.
 See [docs/branch-protection.md](docs/branch-protection.md) for ruleset semantics, usage,
 `gh` auth scopes, and the self-protection note.
 
+## Development
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for local development setup and test instructions.
+
+Key commands:
+
+- `make test` — run all test suites
+- `make pytest` — run Python/pytest tests only
+- `make shell-tests` — run shell script tests only
+- `make lint` — run pre-commit hooks (actionlint, yamllint, shellcheck)
+
 ## Standards
 
 This repo follows the [robotsix stack standards](https://github.com/damien-robotsix/robotsix-standards).
