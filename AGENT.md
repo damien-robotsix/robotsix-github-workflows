@@ -49,3 +49,11 @@ that branch to fail immediately.
 Workflows invoke `python3 scripts/<name>.py` and tests import the same
 module, so test coverage always exercises the live logic and the workflow
 cannot drift from it.
+
+### Rule 7 — Composite actions live under `.github/actions/<name>/action.yml` with a snake_case directory name
+
+Three composite actions now exist in this repo (`bump-setup`, `python-setup`,
+`trivy-sarif`), each extracting duplicated workflow logic.  New composite
+actions must follow the same conventions: a single `action.yml` at the root
+of the directory, commit-SHA-pinned `uses:` lines (Rule 1 applies), and
+`persist-credentials: false` on any `actions/checkout` step (Rule 3 applies).
