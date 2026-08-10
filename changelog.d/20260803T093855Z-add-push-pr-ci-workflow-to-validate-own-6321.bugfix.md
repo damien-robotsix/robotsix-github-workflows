@@ -1,0 +1,1 @@
+Fix action-validator job in CI: use correct `patterns` input name (previously used `workflow_files` which is not a declared input of `mpalmer/action-validator`). The default `patterns` value already covers `.github/workflows/*.yml`, but we now explicitly pass it for clarity.
