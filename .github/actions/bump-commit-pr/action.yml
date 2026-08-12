@@ -1,0 +1,89 @@
+name: Bump commit and PR
+description: >
+  Shared detect-changes / commit-and-push / open-or-reuse-PR tail for
+  the bump workflows.  Parameterizes the file lists, commit message,
+  and PR title/body so deps-bump.yml and pin-bump.yml only carry their
+  package-specific upgrade step.
+inputs:
+  token:
+    description: >
+      GitHub token with contents:write and pull-requests:write
+      (typically the bump-setup minted installation token).
+    required: true
+  bump-branch:
+    description: Branch to force-push the bump commit to.
+    required: true
+  default-branch:
+    description: Base branch for the PR and git push target.
+    required: false
+    default: "main"
+  diff-files:
+    description: >
+      Space-separated list of files to pass to `git diff --quiet`.
+      When ALL are unchanged the commit and PR steps are skipped.
+    required: true
+  add-files:
+    description: >
+      Space-separated list of files to `git add` before committing.
+    required: true
+  commit-message:
+    description: Commit message for the bump commit.
+    required: true
+  pr-title:
+    description: Title of the bump PR.
+    required: true
+  pr-body:
+    description: >
+      Body of the bump PR.  Backticks must be shell-escaped (\`)
+      because the value is expanded inside double quotes.
+    required: true
+outputs:
+  changed:
+    description: "'true' if the diff files were changed; 'false' otherwise."
+    value: ${{ steps.diff.outputs.changed }}
+runs:
+  using: composite
+  steps:
+    - name: Detect changes
+      id: diff
+      shell: bash
+      env:
+        DIFF_FILES: ${{ inputs.diff-files }}
+      run: |
+        # shellcheck disable=SC2086
+        git diff --quiet $DIFF_FILES && echo "changed=false" >> "$GITHUB_OUTPUT" || echo "changed=true" >> "$GITHUB_OUTPUT"
+
+    - name: Commit and push bump branch
+      if: steps.diff.outputs.changed == 'true'
+      shell: bash
+      env:
+        BUMP_BRANCH: ${{ inputs.bump-branch }}
+        ADD_FILES: ${{ inputs.add-files }}
+        COMMIT_MSG: ${{ inputs.commit-message }}
+      run: |
+        git checkout -B "$BUMP_BRANCH"
+        # shellcheck disable=SC2086
+        git add $ADD_FILES
+        git commit -m "$COMMIT_MSG"
+        git push --force origin "$BUMP_BRANCH"
+
+    - name: Open or reuse PR
+      if: steps.diff.outputs.changed == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        BUMP_BRANCH: ${{ inputs.bump-branch }}
+        DEFAULT_BRANCH: ${{ inputs.default-branch }}
+        PR_TITLE: ${{ inputs.pr-title }}
+        PR_BODY: ${{ inputs.pr-body }}
+      run: |
+        EXISTING=$(gh pr list --head "$BUMP_BRANCH" --base "$DEFAULT_BRANCH" --json number -q '.[0].number' 2>/dev/null || echo "")
+        if [ -n "$EXISTING" ]; then
+          echo "PR #${EXISTING} already open for ${BUMP_BRANCH} — updated by the force-push above."
+        else
+          gh pr create \
+            --title "$PR_TITLE" \
+            --body "$PR_BODY" \
+            --base "$DEFAULT_BRANCH" \
+            --head "$BUMP_BRANCH"
+        fi

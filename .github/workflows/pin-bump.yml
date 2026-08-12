@@ -116,36 +116,14 @@ jobs:
           # shellcheck disable=SC2086
           python3 _workflow-lib/scripts/pin-bump.py per-repo $PKG_ARGS
 
-      - name: Detect changes
-        id: diff
-        run: |
-          git diff --quiet pyproject.toml uv.lock && echo "changed=false" >> "$GITHUB_OUTPUT" || echo "changed=true" >> "$GITHUB_OUTPUT"
-
-      - name: Commit and push bump branch
-        if: steps.diff.outputs.changed == 'true'
-        env:
-          BUMP_BRANCH: ${{ inputs.bump-branch }}
-          DEFAULT_BRANCH: ${{ inputs.default-branch }}
-        run: |
-          git checkout -B "$BUMP_BRANCH"
-          git add pyproject.toml uv.lock
-          git commit -m "chore: bump first-party git pin revs"
-          git push --force origin "$BUMP_BRANCH"
-
-      - name: Open or reuse PR
-        if: steps.diff.outputs.changed == 'true'
-        env:
-          GH_TOKEN: ${{ steps.setup.outputs.token }}
-          BUMP_BRANCH: ${{ inputs.bump-branch }}
-          DEFAULT_BRANCH: ${{ inputs.default-branch }}
-        run: |
-          EXISTING=$(gh pr list --head "$BUMP_BRANCH" --base "$DEFAULT_BRANCH" --json number -q '.[0].number' 2>/dev/null || echo "")
-          if [ -n "$EXISTING" ]; then
-            echo "PR #${EXISTING} already open for ${BUMP_BRANCH} — updated by the force-push above."
-          else
-            gh pr create \
-              --title "chore: bump first-party git pin revs" \
-              --body "Automated first-party git pin bump via \`scripts/pin-bump.py\`." \
-              --base "$DEFAULT_BRANCH" \
-              --head "$BUMP_BRANCH"
-          fi
+      - name: Commit bump and open PR
+        uses: ./.github/actions/bump-commit-pr
+        with:
+          token: ${{ steps.setup.outputs.token }}
+          bump-branch: ${{ inputs.bump-branch }}
+          default-branch: ${{ inputs.default-branch }}
+          diff-files: pyproject.toml uv.lock
+          add-files: pyproject.toml uv.lock
+          commit-message: "chore: bump first-party git pin revs"
+          pr-title: "chore: bump first-party git pin revs"
+          pr-body: 'Automated first-party git pin bump via \`scripts/pin-bump.py\`.'
