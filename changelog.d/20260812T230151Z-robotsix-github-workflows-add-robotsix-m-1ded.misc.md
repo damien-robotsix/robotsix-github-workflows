@@ -1,0 +1,1 @@
+Add `.robotsix-mill/config.yaml` declaring `languages: [shell, yaml]` so the mill's source-scanner periodic agents (docstring_coverage, test_gap, mypy, vulture, ruff) are correctly scoped out of this YAML/shell workflow-library repo.
