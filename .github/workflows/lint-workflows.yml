@@ -51,7 +51,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           persist-credentials: false
-      - uses: reviewdog/action-actionlint@db58217885f9a6570da9c71be4e40ec33fe44a1f  # v1.65.0
+      - uses: reviewdog/action-actionlint@d63ba7532e0942965320cd8d73cbae4c7b3c5283  # v1.73.1
         with:
           fail_on_error: true
 
