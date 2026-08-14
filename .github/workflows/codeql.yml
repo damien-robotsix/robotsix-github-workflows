@@ -45,7 +45,7 @@ jobs:
           queries: ${{ inputs.queries }}
           config-file: ${{ inputs.config-file }}
 
-      - uses: github/codeql-action/autobuild@03e4368ac7daa2bd82b3e85262f3bf87ee112f57  # v3.36.0
+      - uses: github/codeql-action/autobuild@5595ccaf912efad79be6eef63a5619ff05969be3  # v4.37.6
         # autobuild is a no-op for Python but included so this workflow
         # extends to compiled languages without changes
 
