@@ -131,6 +131,41 @@ No secrets.
 |---|---|---|
 | `app-private-key` | yes | GitHub App private key. |
 
+## `release-please.yml`
+
+Conventional-commit release automation: opens/updates the release PR on every
+push to the default branch, then creates the tag and GitHub Release when that
+PR merges.  The caller keeps the triggers, the concurrency group and the
+release-PR guard; this workflow owns the token minting, the release-please
+action and the `uv.lock` sync.
+
+| Input | Type | Default | Description |
+|---|---|---|---|
+| `app-id` | string | — | GitHub App ID for release authentication. |
+| `runs-on` | string | `ubuntu-latest` | Runner label for the release job. |
+| `default-branch` | string | `main` | Default branch; the release branch is derived as `release-please--branches--<default-branch>`. |
+| `timeout-minutes` | number | `10` | Job timeout. |
+| `sync-uv-lock` | boolean | `true` | Regenerate `uv.lock` on the release branch after the bump.  Turn off for repos with no `uv.lock`. |
+| `skip-labeling` | boolean | `false` | Pass through to release-please's `skip-labeling`. |
+| `harden-runner` | boolean | `false` | Run `step-security/harden-runner` in audit mode first. |
+| `permission-contents` | string | `write` | Minted-token scope: release commit, tag, Release. |
+| `permission-pull-requests` | string | `write` | Minted-token scope: open and update the release PR. |
+| `permission-workflows` | string | `write` | Minted-token scope: tag a commit whose workflows differ from the default branch — see below. |
+
+| Secret | Required | Description |
+|---|---|---|
+| `app-private-key` | yes | GitHub App private key for token minting. |
+
+**Why `workflows: write` is not optional in practice.** Creating the Release
+creates a tag ref at the release commit, and GitHub treats creating a ref whose
+`.github/workflows/**` differ from the default branch as *modifying workflow
+files* — permitted only with `workflows: write`.  Dependabot bumping an action
+while the release PR is open is enough to cause that drift.  Without the scope
+the release creation fails with `Resource not accessible by integration`, the
+tag is never cut, and every later push retries the same failure.  The API
+states the accepted alternatives in its response header:
+`x-accepted-github-permissions: contents=write; contents=write,workflows=write`.
+
 ## `python-ci.yml`
 
 | Input | Type | Default | Description |

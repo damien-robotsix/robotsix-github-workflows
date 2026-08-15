@@ -1,0 +1,172 @@
+name: Release Please
+
+# Fleet-wide release automation per robotsix-standards release-please.md.
+# The caller keeps the triggers, the concurrency group and the release-PR
+# guard; everything below — token minting, the release-please action and the
+# uv.lock sync — lives here so a fix lands once for the whole fleet.
+#
+# CRITICAL: release-please must NOT run on GITHUB_TOKEN. A release PR opened
+# with it triggers no workflow runs, so its required checks never report and
+# it can never merge. The caller supplies a GitHub App (app-id input +
+# app-private-key secret) and an installation token is minted per run. App
+# tokens live ~1h, so they cannot be stored as a static secret, which is why
+# minting happens HERE and not in the caller (reusable-workflow `secrets:`
+# cannot carry runtime step outputs).
+
+on:
+  workflow_call:
+    inputs:
+      app-id:
+        description: >
+          GitHub App ID used to mint the installation token that opens the
+          release PR and creates the tag and Release (pair with the
+          app-private-key secret).
+        required: true
+        type: string
+      runs-on:
+        description: Runner label for the release job.
+        required: false
+        type: string
+        default: "ubuntu-latest"
+      default-branch:
+        description: >
+          Name of the default branch. The release branch release-please
+          works on is derived from it as
+          release-please--branches--<default-branch>.
+        required: false
+        type: string
+        default: "main"
+      timeout-minutes:
+        description: Job timeout. Release automation; well under the 360-minute default.
+        required: false
+        type: number
+        default: 10
+      sync-uv-lock:
+        description: >
+          Regenerate uv.lock on the release branch after the version bump.
+          Turn off for repos with no uv.lock.
+        required: false
+        type: boolean
+        default: true
+      skip-labeling:
+        description: Pass through to release-please's skip-labeling.
+        required: false
+        type: boolean
+        default: false
+      harden-runner:
+        description: Run step-security/harden-runner in audit mode before anything else.
+        required: false
+        type: boolean
+        default: false
+      permission-contents:
+        description: >
+          Scope for the minted token's repository contents — the release
+          commit, the tag and the Release.
+        required: false
+        type: string
+        default: "write"
+      permission-pull-requests:
+        description: Scope for the minted token's pull requests — open and update the release PR.
+        required: false
+        type: string
+        default: "write"
+      permission-workflows:
+        description: >
+          Scope for the minted token's workflow files. Creating the release
+          creates a tag ref at the release commit, and GitHub treats a ref
+          whose `.github/workflows/**` differ from the default branch as
+          touching workflow files — which an App token may only do with
+          `workflows: write`. Workflows drift between a release PR opening
+          and its merge often enough (dependabot alone does it), and when
+          they do, release creation 403s with "Resource not accessible by
+          integration" and every later push retries the same failure.
+        required: false
+        type: string
+        default: "write"
+    secrets:
+      app-private-key:
+        description: PEM private key of the GitHub App named by the app-id input.
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  release-please:
+    name: Release Please
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: write       # create the release commit, tag and GitHub Release
+      pull-requests: write  # open and update the release PR
+    steps:
+      - uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40  # v2.20.1
+        if: inputs.harden-runner
+        with:
+          egress-policy: audit
+
+      - name: Mint a GitHub App installation token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
+        with:
+          app-id: ${{ inputs.app-id }}
+          private-key: ${{ secrets.app-private-key }}
+          # Scoped: an unscoped token inherits the App's blanket installation
+          # permissions (zizmor github-app, high).
+          permission-contents: ${{ inputs.permission-contents }}
+          permission-pull-requests: ${{ inputs.permission-pull-requests }}
+          permission-workflows: ${{ inputs.permission-workflows }}
+
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7  # v5.0.0
+        id: release
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          skip-labeling: ${{ inputs.skip-labeling }}
+
+      # Only the lock-sync step below needs these; release-please itself needs
+      # neither a checkout nor uv.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v5
+        if: inputs.sync-uv-lock && (steps.release.outputs.prs_created == 'true' || steps.release.outputs.pr != '')
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v7
+        if: inputs.sync-uv-lock && (steps.release.outputs.prs_created == 'true' || steps.release.outputs.pr != '')
+        with:
+          # No cache: this job has contents:write, and a poisoned cache in a
+          # write-privileged workflow is a supply-chain risk.
+          enable-cache: false
+
+      # uv.lock records the project's own version, so a release that bumps
+      # [project].version leaves it stale and `uv sync --locked` fails.
+      - name: Sync uv.lock to the released version
+        if: inputs.sync-uv-lock && (steps.release.outputs.prs_created == 'true' || steps.release.outputs.pr != '')
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          BRANCH: release-please--branches--${{ inputs.default-branch }}
+        run: |
+          set -euo pipefail
+          # `persist-credentials: false` leaves `origin` without credentials,
+          # so every git call here goes through an authenticated remote URL
+          # rather than the remote name.
+          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          # The release branch is deleted when its PR merges, yet a later
+          # run can still report an existing PR and satisfy this step's
+          # guard. A missing branch means there is nothing to sync — not a
+          # failure. Without this the job dies on `git checkout -B` with
+          # "not a commit", reddening the default branch.
+          if ! git ls-remote --exit-code --heads "$REMOTE" "$BRANCH" >/dev/null 2>&1; then
+            echo "No $BRANCH on origin — nothing to sync."
+            exit 0
+          fi
+          git fetch --depth=1 "$REMOTE" "$BRANCH"
+          git checkout -B "$BRANCH" FETCH_HEAD
+          uv lock
+          if git diff --quiet -- uv.lock; then
+            echo "uv.lock already matches the released version."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: sync uv.lock to the released version" -- uv.lock
+          git push "$REMOTE" "$BRANCH"
