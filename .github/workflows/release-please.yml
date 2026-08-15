@@ -150,23 +150,37 @@ jobs:
           # so every git call here goes through an authenticated remote URL
           # rather than the remote name.
           REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          # The release branch is deleted when its PR merges, yet a later
-          # run can still report an existing PR and satisfy this step's
-          # guard. A missing branch means there is nothing to sync — not a
-          # failure. Without this the job dies on `git checkout -B` with
-          # "not a commit", reddening the default branch.
-          if ! git ls-remote --exit-code --heads "$REMOTE" "$BRANCH" >/dev/null 2>&1; then
-            echo "No $BRANCH on origin — nothing to sync."
-            exit 0
-          fi
-          git fetch --depth=1 "$REMOTE" "$BRANCH"
-          git checkout -B "$BRANCH" FETCH_HEAD
-          uv lock
-          if git diff --quiet -- uv.lock; then
-            echo "uv.lock already matches the released version."
-            exit 0
-          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "chore: sync uv.lock to the released version" -- uv.lock
-          git push "$REMOTE" "$BRANCH"
+
+          # The release branch can advance under us: release-please finishes
+          # writing it asynchronously, and a second run triggered by another
+          # merge does the same work concurrently. A push that loses that race
+          # is rejected with "(fetch first)" and used to fail the job. The
+          # lock commit is generated, not authored, so the recovery is simply
+          # to start over on the new tip rather than rebase.
+          for attempt in 1 2 3; do
+            # The release branch is deleted when its PR merges, yet a later
+            # run can still report an existing PR and satisfy this step's
+            # guard. A missing branch means there is nothing to sync — not a
+            # failure. Without this the job dies on `git checkout -B` with
+            # "not a commit", reddening the default branch.
+            if ! git ls-remote --exit-code --heads "$REMOTE" "$BRANCH" >/dev/null 2>&1; then
+              echo "No $BRANCH on the remote — nothing to sync."
+              exit 0
+            fi
+            git fetch --depth=1 "$REMOTE" "$BRANCH"
+            git checkout -B "$BRANCH" FETCH_HEAD
+            uv lock
+            if git diff --quiet -- uv.lock; then
+              echo "uv.lock already matches the released version."
+              exit 0
+            fi
+            git commit -m "chore: sync uv.lock to the released version" -- uv.lock
+            if git push "$REMOTE" "$BRANCH"; then
+              exit 0
+            fi
+            echo "Push rejected on attempt $attempt — the branch moved. Retrying on its new tip."
+          done
+          echo "::error::Could not sync uv.lock after 3 attempts; the release branch keeps moving."
+          exit 1
