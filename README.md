@@ -34,7 +34,7 @@ Mill-domain checks (e.g. `check_kind_literals`) live in robotsix-mill's own CI, 
 ## Documentation
 
 - [Workflow Reference](docs/workflow-reference.md) — consolidated input, default, and secret reference
-  for all 16 reusable workflows.
+  for all 17 reusable workflows.
 - [Branch Protection](docs/branch-protection.md) — ruleset semantics, usage, and required `gh` auth scopes.
 
 ## `auto-release.yml` — caller template
@@ -199,6 +199,14 @@ jobs:
     permissions:
       contents: read
       pages: write       # required for Pages deploy
+      id-token: write    # required for Pages deploy
+    # All inputs are optional — defaults shown in comments:
+    # with:
+    #   docs-install-args: "--group docs"      # default
+    #   python-version: "3.14"                 # default
+    #   uv-version: "0.8.15"                   # default
+    #   retries: "4"                           # default
+```
 
 ## `mutation-test.yml` — caller template
 
@@ -231,13 +239,6 @@ The run is advisory, never a blocking check: the `mutmut run` step always passes
 is written to the job step summary.
 
 See [Workflow Reference](docs/workflow-reference.md) for all inputs and defaults.
-      id-token: write    # required for Pages deploy
-    # All inputs are optional — defaults shown in comments:
-    # with:
-    #   docs-install-args: "--group docs"      # default
-    #   python-version: "3.14"                 # default
-    #   uv-version: "0.8.15"                   # default
-    #   retries: "4"                           # default
 ```
 
 **Consumer prerequisites:**
