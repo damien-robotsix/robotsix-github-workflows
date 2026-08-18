@@ -105,6 +105,16 @@ No explicit secrets input (callers pass `secrets: inherit`).
 
 No secrets.
 
+## `mutation-test.yml`
+
+| Input | Type | Default | Description |
+|---|---|---|---|
+| `python-version` | string | `3.14` | Python version. |
+| `timeout-minutes` | number | `120` | Job timeout in minutes. |
+| `dependency-group` | string | `dev` | uv dependency group that installs mutmut. |
+
+No secrets.
+
 ## `pin-bump.yml`
 
 | Input | Type | Default | Description |

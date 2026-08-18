@@ -1,0 +1,74 @@
+name: Mutation Test
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: Python version to set up.
+        required: false
+        type: string
+        default: "3.14"
+      timeout-minutes:
+        description: Job timeout in minutes.
+        required: false
+        type: number
+        default: 120
+      dependency-group:
+        description: uv dependency group that installs mutmut.
+        required: false
+        type: string
+        default: "dev"
+
+permissions:
+  contents: read
+
+jobs:
+  mutate:
+    name: Mutation test
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    env:
+      UV_CACHE_DIR: .cache/uv
+    steps:
+      - uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40  # v2.20.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+          cache-python: true
+          python-version: ${{ inputs.python-version }}
+
+      - name: Install dev dependencies
+        # Inputs flow through env, never inline into the run block, to
+        # avoid template injection (zizmor).
+        run: uv sync --locked --group "$DEPENDENCY_GROUP"
+        env:
+          DEPENDENCY_GROUP: ${{ inputs.dependency-group }}
+
+      - name: Run mutation tests
+        # Advisory only: mutmut has no pass/fail threshold knob, so the
+        # run never gates; the score is reported instead.
+        run: uv run mutmut run --no-progress || true
+
+      - name: Report mutation results
+        run: uv run mutmut report
+
+      - name: Generate HTML report
+        run: uv run mutmut html
+
+      - name: Upload HTML report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: mutmut-html-report
+          path: html/
+
+      - name: Write mutation score to step summary
+        run: |
+          SCORE=$(uv run mutmut results | tail -1 | grep -oP '\d+\.\d+' || echo "N/A")
+          echo "### Mutation score: ${SCORE}%" >> "$GITHUB_STEP_SUMMARY"

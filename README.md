@@ -25,6 +25,7 @@ jobs:
 | `codeql.yml` | CodeQL static analysis |
 | `config-ownership-check.yml` | PR gate: prevents deploy-plane config from leaking component-internal settings |
 | `lint-workflows.yml` | actionlint + zizmor audit of workflow files, and SARIF-upload-permission validation |
+| `mutation-test.yml` | weekly advisory mutmut mutation testing (HTML report + step-summary score) |
 | `pin-bump.yml` | scheduled per-repo first-party git pin bump PR |
 | `pin-bump-sweep.yml` | fleet-wide coherent-set pin-bump sweep orchestrator |
 
@@ -198,6 +199,38 @@ jobs:
     permissions:
       contents: read
       pages: write       # required for Pages deploy
+
+## `mutation-test.yml` — caller template
+
+Consumer repos add a thin wrapper workflow (e.g. `.github/workflows/mutation-test.yml`)
+that triggers on a weekly schedule + manual dispatch.  A reusable workflow cannot
+own its own `schedule`, so the cron stays in the caller:
+
+```yaml
+name: Weekly mutation test
+
+on:
+  schedule:
+    - cron: "0 6 * * 2"  # every Tuesday at 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  mutate:
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/mutation-test.yml@<sha>
+    permissions:
+      contents: read
+    # All inputs are optional — defaults shown in comments:
+    # with:
+    #   python-version: "3.14"          # default
+    #   timeout-minutes: 120            # default
+    #   dependency-group: "dev"         # default
+```
+
+The run is advisory, never a blocking check: the `mutmut run` step always passes
+(`|| true`), the HTML report is uploaded as an artifact, and the mutation score
+is written to the job step summary.
+
+See [Workflow Reference](docs/workflow-reference.md) for all inputs and defaults.
       id-token: write    # required for Pages deploy
     # All inputs are optional — defaults shown in comments:
     # with:
