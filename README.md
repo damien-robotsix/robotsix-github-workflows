@@ -24,7 +24,7 @@ jobs:
 | `changelog-check.yml` | towncrier fragment gate for pull requests (skip-changelog label exempt) |
 | `codeql.yml` | CodeQL static analysis |
 | `config-ownership-check.yml` | PR gate: prevents deploy-plane config from leaking component-internal settings |
-| `lint-workflows.yml` | actionlint + zizmor audit of workflow files, and SARIF-upload-permission validation |
+| `lint-workflows.yml` | actionlint + zizmor audit of workflow files, SARIF-upload-permission validation, and trigger-coverage validation |
 | `mutation-test.yml` | weekly advisory mutmut mutation testing (HTML report + step-summary score) |
 | `pin-bump.yml` | scheduled per-repo first-party git pin bump PR |
 | `pin-bump-sweep.yml` | fleet-wide coherent-set pin-bump sweep orchestrator |
