@@ -1,0 +1,177 @@
+name: Bump
+
+# Shared reusable workflow for automated dependency-pin bumps.  Supports
+# two modes selected via ``bump-mode``:
+#
+#   deps  —  uv lock --upgrade-package <packages>  (single-repo, first-party)
+#   pins  —  scripts/pin-bump.py per-repo <packages>  (single-repo, git-sourced)
+#
+# CRITICAL: This workflow pushes commits and creates PRs, so it MUST use a
+# caller-supplied credential that is NOT the default GITHUB_TOKEN.
+# GitHub deliberately suppresses workflow runs for events created by
+# GITHUB_TOKEN to prevent recursion — CI workflows will NOT fire on the
+# bump PR if you pass GITHUB_TOKEN.
+#
+# The caller MUST supply a GitHub App (app-id input + app-private-key
+# secret). An installation token is minted per run; no expiry/rotation,
+# bot identity. App tokens live ~1h so they cannot be stored as a
+# static secret, which is why minting happens HERE and not in the
+# caller (reusable-workflow `secrets:` cannot carry runtime step
+# outputs).
+
+on:
+  workflow_call:
+    inputs:
+      bump-mode:
+        description: >
+          Bump mode to run. "deps" upgrades first-party package pins via
+          uv lock --upgrade-package; "pins" resolves HEAD commits of
+          git-sourced dependencies and rewrites rev fields in
+          pyproject.toml.
+        required: true
+        type: string
+      packages:
+        description: >
+          Space-separated list of package names to bump.  For bump-mode
+          "deps": first-party packages, each becomes a separate
+          --upgrade-package flag.  For bump-mode "pins": subset of
+          [tool.uv.sources] entries; when empty ALL git-sourced pins
+          are bumped.
+        required: true
+        type: string
+      uv-version:
+        description: uv version to install.
+        required: false
+        type: string
+        default: "0.8.15"
+      default-branch:
+        description: Base branch for the PR and git push target.
+        required: false
+        type: string
+        default: "main"
+      bump-branch:
+        description: >
+          Branch to force-push the bump commit to.  Stable name → repeated
+          runs overwrite; an open PR on the branch is detected and reused
+          rather than duplicated.
+        required: false
+        type: string
+        default: "deps-bump/first-party"
+      app-id:
+        description: >
+          GitHub App ID used to mint an installation token for the
+          bump push (pair with the app-private-key secret). The app
+          must be installed on the repo with contents:write and
+          pull-requests:write.
+        required: true
+        type: string
+      permission-contents:
+        description: >
+          Permission scope for the minted token's repository contents
+          (push bump branch).
+        required: false
+        type: string
+        default: "write"
+      permission-pull-requests:
+        description: >
+          Permission scope for the minted token's pull requests
+          (create/update PRs).
+        required: false
+        type: string
+        default: "write"
+    secrets:
+      app-private-key:
+        description: >
+          PEM private key of the GitHub App named by the app-id
+          input. Required when app-id is set.
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  bump:
+    name: Bump
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # push bump branch
+      pull-requests: write  # gh pr create
+    steps:
+      - name: Bump setup
+        id: setup
+        uses: ./.github/actions/bump-setup
+        with:
+          app-id: ${{ inputs.app-id }}
+          app-private-key: ${{ secrets.app-private-key }}
+          uv-version: ${{ inputs.uv-version }}
+          repositories: ${{ github.repository }}
+          permission-contents: ${{ inputs.permission-contents }}
+          permission-pull-requests: ${{ inputs.permission-pull-requests }}
+          # pins mode needs the workflow-library repo for pin-bump.py
+          checkout-repository: ${{ inputs.bump-mode == 'pins' && 'damien-robotsix/robotsix-github-workflows' || '' }}
+          checkout-path: ${{ inputs.bump-mode == 'pins' && '_workflow-lib' || '' }}
+
+      - name: Set bump-mode parameters
+        id: params
+        env:
+          BUMP_MODE: ${{ inputs.bump-mode }}
+        run: |
+          case "$BUMP_MODE" in
+            deps)
+              echo "diff-files=uv.lock" >> "$GITHUB_OUTPUT"
+              echo "add-files=uv.lock" >> "$GITHUB_OUTPUT"
+              echo "commit-message=chore: bump first-party pins" >> "$GITHUB_OUTPUT"
+              echo "pr-title=chore: bump first-party pins" >> "$GITHUB_OUTPUT"
+              echo "pr-body=Automated first-party pin bump via \`uv lock --upgrade-package\`." >> "$GITHUB_OUTPUT"
+              ;;
+            pins)
+              echo "diff-files=pyproject.toml uv.lock" >> "$GITHUB_OUTPUT"
+              echo "add-files=pyproject.toml uv.lock" >> "$GITHUB_OUTPUT"
+              echo "commit-message=chore: bump first-party git pin revs" >> "$GITHUB_OUTPUT"
+              echo "pr-title=chore: bump first-party git pin revs" >> "$GITHUB_OUTPUT"
+              echo "pr-body=Automated first-party git pin bump via \`scripts/pin-bump.py\`." >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "ERROR: unknown bump-mode: $BUMP_MODE" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Upgrade first-party pins
+        if: inputs.bump-mode == 'deps'
+        env:
+          PACKAGES: ${{ inputs.packages }}
+        run: |
+          flags=""
+          # shellcheck disable=SC2086
+          for pkg in $PACKAGES; do
+            flags="$flags --upgrade-package $pkg"
+          done
+          # shellcheck disable=SC2086
+          uv lock $flags
+
+      - name: Resolve and update git pin revs
+        if: inputs.bump-mode == 'pins'
+        id: bump
+        env:
+          FILTER_PACKAGES: ${{ inputs.packages }}
+        run: |
+          PKG_ARGS=""
+          # shellcheck disable=SC2086
+          for p in $FILTER_PACKAGES; do
+            PKG_ARGS="$PKG_ARGS --packages $p"
+          done
+          # shellcheck disable=SC2086
+          python3 _workflow-lib/scripts/pin-bump.py per-repo $PKG_ARGS
+
+      - name: Commit bump and open PR
+        uses: ./.github/actions/bump-commit-pr
+        with:
+          token: ${{ steps.setup.outputs.token }}
+          bump-branch: ${{ inputs.bump-branch }}
+          default-branch: ${{ inputs.default-branch }}
+          diff-files: ${{ steps.params.outputs.diff-files }}
+          add-files: ${{ steps.params.outputs.add-files }}
+          commit-message: ${{ steps.params.outputs.commit-message }}
+          pr-title: ${{ steps.params.outputs.pr-title }}
+          pr-body: ${{ steps.params.outputs.pr-body }}
