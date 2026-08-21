@@ -1,0 +1,1 @@
+Fix pin-bump-sweep weekly cron never running — drop the `if: github.event_name == 'workflow_call'` gate and add fallback defaults for `app-id`, `private-key`, and `uv-version` so the scheduled and dispatched paths actually execute. Add a `lint_trigger_coverage` check that catches jobs whose `if:` condition excludes every declared workflow trigger.

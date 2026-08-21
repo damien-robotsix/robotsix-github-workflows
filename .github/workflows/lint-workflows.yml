@@ -41,6 +41,9 @@ jobs:
           SARIF_WORKFLOWS: ${{ inputs.sarif-workflows }}
         run: python3 scripts/lint_sarif_permissions.py
 
+      - name: Validate trigger coverage
+        run: python3 scripts/lint_trigger_coverage.py
+
   actionlint:
     name: Actionlint
     if: ${{ inputs.run-actionlint }}
