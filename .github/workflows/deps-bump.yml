@@ -64,9 +64,12 @@ on:
           input. Required when app-id is set.
         required: true
 
+permissions: {}
+
 jobs:
   bump:
     name: Bump
+    permissions: {}
     uses: ./.github/workflows/bump.yml
     with:
       bump-mode: deps
