@@ -209,6 +209,20 @@ No secrets.
 
 No secrets.
 
+Deploys to GitHub Pages via the modern Pages Actions (build type: "workflow").
+Callers must grant `pages: write` + `id-token: write` (not `contents: write`),
+so this workflow does NOT use `mkdocs gh-deploy` (which pushes to the
+`gh-pages` branch and needs `contents: write`).  Enable Pages once per repo
+with source "GitHub Actions".
+
+No workflow-level concurrency group is set — `github.workflow` resolves to
+the *caller's* workflow name in a reusable workflow, so a caller-side
+`${{ github.workflow }}-...` group would deadlock. Callers own concurrency
+(e.g. `group: pages`).
+
+Dependency installation retries up to `retries` times with a 10-second
+backoff between attempts to handle transient PyPI or registry errors.
+
 ## `python-security.yml`
 
 | Input | Type | Default | Description |
@@ -227,11 +241,34 @@ No secrets.
 
 No secrets.
 
+Runs TruffleHog secret-scanning and pip-audit dependency-vulnerability
+scanning in a single job.  TruffleHog supports two modes: PR-diff scan
+(`trufflehog-pr-diff: true`, scans only the base/head diff) and full
+checkout scan (default, scans the entire repository).  pip-audit supports
+two audit modes: when `pip-audit-requirements-file` is set, exports a
+locked requirements file and audits that; when empty, audits the synced
+environment directly via `uv run pip-audit`.
+
+An SBOM (CycloneDX JSON) is generated and uploaded as a build artifact on
+every run via `always()`, so it is available even when scans fail.
+
 ## `scan-container.yml`
 
 | Input | Type | Default | Description |
 |---|---|---|---|
-| `image-name` | string | `ghcr.io/<owner>/<repo>:main` | Image to rescan. |
+| `image-name` | string | `""` | Full image ref to scan (e.g. `ghcr.io/<owner>/<repo>:main`). When empty, falls back to `ghcr.io/$GITHUB_REPOSITORY:main` at runtime. |
 | `ignore-unfixed` | boolean | `false` | Skip CVEs with no upstream fix. Defaults to false so all findings surface in the Security tab. |
 
 No secrets (caller needs `security-events: write` and `contents: read`).
+
+Report-only scheduled rescan workflow — there is no exit-code gate, so
+findings do not fail the run.  No severity filter is applied; scheduled
+rescans surface all findings (including LOW) for trend tracking in the
+Code Scanning dashboard.  Scans are performed via the
+`.github/actions/trivy-sarif` composite action, which uploads SARIF results
+to the repository's Code Scanning endpoint.
+
+The `image-name` default is a static empty string because `workflow_call`
+input `default:` values cannot contain `${{ }}` expressions (GitHub rejects
+them as an invalid workflow file).  The dynamic `ghcr.io/<owner>/<repo>:main`
+fallback is computed inside the job step.

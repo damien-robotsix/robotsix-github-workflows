@@ -97,19 +97,41 @@ jobs:
       contents: write       # push bump branch
       pull-requests: write  # gh pr create
     steps:
-      - name: Bump setup
-        id: setup
-        uses: ./.github/actions/bump-setup
+      # Inlined bump setup — GitHub resolves relative `./` composite-action
+      # paths against the caller's checkout, so cross-repo callers fail with
+      # "Can't find 'action.yml'". All steps are inlined below.
+
+      - name: Check out workflow library (pins mode)
+        if: inputs.bump-mode == 'pins'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          repository: damien-robotsix/robotsix-github-workflows
+          path: _workflow-lib
+          persist-credentials: false
+
+      - name: Mint GitHub App installation token
+        id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349  # v2.2.2
         with:
           app-id: ${{ inputs.app-id }}
-          app-private-key: ${{ secrets.app-private-key }}
-          uv-version: ${{ inputs.uv-version }}
+          private-key: ${{ secrets.app-private-key }}
           repositories: ${{ github.repository }}
           permission-contents: ${{ inputs.permission-contents }}
           permission-pull-requests: ${{ inputs.permission-pull-requests }}
-          # pins mode needs the workflow-library repo for pin-bump.py
-          checkout-repository: ${{ inputs.bump-mode == 'pins' && 'damien-robotsix/robotsix-github-workflows' || '' }}
-          checkout-path: ${{ inputs.bump-mode == 'pins' && '_workflow-lib' || '' }}
+
+      - name: Check out repository
+        # persist-credentials intentionally left true: the push step needs the
+        # minted credential in git's credential store.
+        # zizmor: ignore[artipacked]
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+        with:
+          version: ${{ inputs.uv-version }}
 
       - name: Set bump-mode parameters
         id: params
@@ -164,14 +186,61 @@ jobs:
           # shellcheck disable=SC2086
           python3 _workflow-lib/scripts/pin-bump.py per-repo $PKG_ARGS
 
+      # Inlined commit + PR — same rationale as bump setup above.
+
+      - name: Set git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
       - name: Commit bump and open PR
-        uses: ./.github/actions/bump-commit-pr
-        with:
-          token: ${{ steps.setup.outputs.token }}
-          bump-branch: ${{ inputs.bump-branch }}
-          default-branch: ${{ inputs.default-branch }}
-          diff-files: ${{ steps.params.outputs.diff-files }}
-          add-files: ${{ steps.params.outputs.add-files }}
-          commit-message: ${{ steps.params.outputs.commit-message }}
-          pr-title: ${{ steps.params.outputs.pr-title }}
-          pr-body: ${{ steps.params.outputs.pr-body }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          BUMP_BRANCH: ${{ inputs.bump-branch }}
+          DEFAULT_BRANCH: ${{ inputs.default-branch }}
+          ADD_FILES: ${{ steps.params.outputs.add-files }}
+          COMMIT_MESSAGE: ${{ steps.params.outputs.commit-message }}
+          PR_TITLE: ${{ steps.params.outputs.pr-title }}
+          PR_BODY: ${{ steps.params.outputs.pr-body }}
+        run: |
+          for f in $ADD_FILES; do
+            git add "$f"
+          done
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit — exiting."
+            exit 0
+          fi
+
+          git commit -m "$COMMIT_MESSAGE"
+
+          echo "Attempting direct push to $BUMP_BRANCH..."
+          set +e
+          push_output=$(git push origin "HEAD:$BUMP_BRANCH" --force 2>&1)
+          push_rc=$?
+          set -e
+
+          if [ "$push_rc" -eq 0 ]; then
+            echo "Direct push succeeded."
+
+            # Check for existing PR from this branch and update or create.
+            EXISTING_PR=$(gh pr list --base "$DEFAULT_BRANCH" --head "$BUMP_BRANCH" --json number --jq '.[0].number' 2>/dev/null || echo "")
+            if [ -n "$EXISTING_PR" ]; then
+              echo "Updating existing PR #$EXISTING_PR."
+              gh pr edit "$EXISTING_PR" --title "$PR_TITLE" --body "$PR_BODY"
+            else
+              echo "Creating new PR."
+              gh pr create --title "$PR_TITLE" --body "$PR_BODY" --base "$DEFAULT_BRANCH" --head "$BUMP_BRANCH"
+            fi
+          elif echo "$push_output" | grep -qiE "protected branch|GH006|required status check"; then
+            echo "Branch protection detected — falling back to temp branch + PR."
+
+            SAFE_BRANCH="$BUMP_BRANCH-$(date +%s)"
+            git checkout -b "$SAFE_BRANCH"
+            git push origin "$SAFE_BRANCH"
+
+            gh pr create --title "$PR_TITLE" --body "$PR_BODY" --base "$DEFAULT_BRANCH" --head "$SAFE_BRANCH"
+          else
+            printf '%s\n' "$push_output" >&2
+            exit "$push_rc"
+          fi
