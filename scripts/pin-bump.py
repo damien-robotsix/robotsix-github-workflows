@@ -433,11 +433,46 @@ def sweep(owner: str, token_env: str) -> int:
         return 0
 
     print(f"\n{len(repo_bumps)} repo(s) need pin bumps.")
+    bumped: list[str] = []
+    failed: list[tuple[str, str]] = []
     with tempfile.TemporaryDirectory() as tmpdir:
         for repo, bumps in repo_bumps.items():
-            _apply_pin_bump(owner, repo, bumps, token, tmpdir)
+            try:
+                _apply_pin_bump(owner, repo, bumps, token, tmpdir)
+                bumped.append(repo)
+            except Exception as exc:
+                failed.append((repo, str(exc)))
+                print(f"\n  FAILED {owner}/{repo}: {exc}", file=sys.stderr)
 
-    return 0
+    # Compute already-current repos (pinned but no bumps needed)
+    all_pinned_repos: set[str] = set()
+    for pins in dep_map.values():
+        for repo_name, _, _ in pins:
+            all_pinned_repos.add(repo_name)
+    already_current = sorted(all_pinned_repos - set(repo_bumps.keys()))
+
+    # Print summary
+    print("\n=== Sweep summary ===")
+    if bumped:
+        print(f"Bumped ({len(bumped)}):")
+        for r in bumped:
+            print(f"  - {owner}/{r}")
+    else:
+        print("Bumped: (none)")
+    if already_current:
+        print(f"Already current ({len(already_current)}):")
+        for r in already_current:
+            print(f"  - {owner}/{r}")
+    else:
+        print("Already current: (none)")
+    if failed:
+        print(f"Failed ({len(failed)}):")
+        for r, reason in failed:
+            print(f"  - {owner}/{r}: {reason}")
+    else:
+        print("Failed: (none)")
+
+    return 1 if failed else 0
 
 
 # ---------------------------------------------------------------------------
