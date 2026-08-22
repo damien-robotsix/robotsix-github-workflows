@@ -18,6 +18,17 @@ on:
         required: false
         type: string
         default: "tracing"
+      sync-args:
+        description: >
+          Full argument string passed verbatim to `uv sync` (e.g.
+          "--locked --group dev --group test").  When non-empty it takes
+          precedence over install-extras — the caller controls
+          --locked/--frozen and dependency groups/extras directly.  When
+          empty (default) the install-extras path runs
+          `uv sync --frozen --extra <x>`.
+        required: false
+        type: string
+        default: ""
       cov-package:
         description: Package passed to pytest --cov=<pkg>.
         required: false
@@ -137,6 +148,7 @@ jobs:
           python-version: ${{ inputs.python-version }}
           uv-version: ${{ inputs.uv-version }}
           install-extras: ${{ inputs.install-extras }}
+          sync-args: ${{ inputs.sync-args }}
 
       - name: deptry (dependency hygiene)
         if: ${{ inputs.run-deptry }}
@@ -296,6 +308,7 @@ jobs:
           python-version: ${{ inputs.python-version }}
           uv-version: ${{ inputs.uv-version }}
           install-extras: ${{ inputs.install-extras }}
+          sync-args: ${{ inputs.sync-args }}
 
       - name: deptry (dependency hygiene)
         if: ${{ inputs.run-deptry }}
@@ -339,6 +352,7 @@ jobs:
           python-version: ${{ inputs.python-version }}
           uv-version: ${{ inputs.uv-version }}
           install-extras: ${{ inputs.install-extras }}
+          sync-args: ${{ inputs.sync-args }}
 
       - name: Mypy (static type check, baseline ratchet)
         if: ${{ inputs.mypy-advisory }}
@@ -386,6 +400,7 @@ jobs:
           python-version: ${{ inputs.python-version }}
           uv-version: ${{ inputs.uv-version }}
           install-extras: ${{ inputs.install-extras }}
+          sync-args: ${{ inputs.sync-args }}
 
       - name: Run tests
         env:

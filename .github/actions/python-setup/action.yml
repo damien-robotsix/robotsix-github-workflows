@@ -15,6 +15,10 @@ inputs:
     description: Extras to install (space-separated).
     required: false
     default: "tracing"
+  sync-args:
+    required: false
+    type: string
+    default: ""
 runs:
   using: composite
   steps:
@@ -33,9 +37,19 @@ runs:
       env:
         UV_PROJECT_ENVIRONMENT: system
         INSTALL_EXTRAS: ${{ inputs.install-extras }}
+        SYNC_ARGS: ${{ inputs.sync-args }}
       run: |
-        extras=""
-        for x in $INSTALL_EXTRAS; do
-          extras="$extras --extra $x"
-        done
-        uv sync --frozen $extras
+        if [ -n "$SYNC_ARGS" ]; then
+          # Caller supplies the full `uv sync` arg string (e.g.
+          # "--locked --group dev --group test"); it controls
+          # --locked/--frozen + groups/extras and takes precedence.
+          # shellcheck disable=SC2086
+          uv sync $SYNC_ARGS
+        else
+          extras=""
+          for x in $INSTALL_EXTRAS; do
+            extras="$extras --extra $x"
+          done
+          # shellcheck disable=SC2086
+          uv sync --frozen $extras
+        fi
