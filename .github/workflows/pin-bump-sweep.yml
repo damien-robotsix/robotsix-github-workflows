@@ -69,9 +69,16 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
 
-      - name: Check out repository without credential
+      # Check out THIS repository, not the caller's: `scripts/pin-bump.py`
+      # lives here, and a bare checkout in a reusable workflow lands the
+      # caller's repo in the workspace. `job_workflow_sha` is the commit of
+      # the reusable workflow file itself, so the script always matches the
+      # workflow version being run.
+      - name: Check out the workflow repository without credential
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
         with:
+          repository: damien-robotsix/robotsix-github-workflows
+          ref: ${{ github.job_workflow_sha }}
           persist-credentials: false
 
       - name: Install uv
