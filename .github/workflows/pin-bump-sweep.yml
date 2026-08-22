@@ -8,19 +8,15 @@ name: Pin Bump Sweep
 # in every affected repository so that all repos that share a dependency
 # receive the same SHA update in the same sweep.
 #
-# Scheduled weekly (Monday 06:00 UTC) and available for manual dispatch.
-# Also callable via workflow_call for programmatic triggering.
+# `workflow_call` only, deliberately. The sweep needs a fleet-wide GitHub App
+# token, and this repository holds no credentials of its own — every consuming
+# repo owns the `RELEASE_APP_ID` variable and `RELEASE_APP_PRIVATE_KEY` secret
+# and passes them in, exactly as it does for release-please. A `schedule` or
+# `workflow_dispatch` trigger here would fire with no credentials to mint a
+# token with, so the schedule lives in a caller stub instead (see
+# robotsix-central-deploy's `pin-bump-sweep.yml`).
 
 on:
-  schedule:
-    - cron: "0 6 * * 1"
-  workflow_dispatch:
-    inputs:
-      owner:
-        description: GitHub org/owner whose repos are swept.
-        required: false
-        type: string
-        default: "damien-robotsix"
   workflow_call:
     inputs:
       owner:
@@ -67,8 +63,8 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349  # v2.2.2
         with:
-          app-id: ${{ inputs.app-id || vars.PIN_BUMP_APP_ID }}
-          private-key: ${{ secrets.app-private-key || secrets.PIN_BUMP_APP_PRIVATE_KEY }}
+          app-id: ${{ inputs.app-id }}
+          private-key: ${{ secrets.app-private-key }}
           # No `repositories:` — fleet-wide token required for cross-repo sweep.
           permission-contents: write
           permission-pull-requests: write
