@@ -65,7 +65,12 @@ jobs:
         with:
           app-id: ${{ inputs.app-id }}
           private-key: ${{ secrets.app-private-key }}
-          # No `repositories:` — fleet-wide token required for cross-repo sweep.
+          # `owner` with no `repositories` is what makes the token
+          # installation-wide. Omitting `repositories` alone is NOT enough:
+          # the action then scopes the token to the calling repository and
+          # every cross-repo push 403s ("Permission to <repo> denied to
+          # <app>[bot]").
+          owner: ${{ inputs.owner || github.repository_owner }}
           permission-contents: write
           permission-pull-requests: write
 
