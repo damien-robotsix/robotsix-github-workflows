@@ -1,0 +1,1 @@
+The sweep now passes `--repo <owner>/<repo>` to its `gh pr list` / `gh pr create` calls. Every git call targets the clone with `-C`, but `gh` resolves the repository from the current directory — the workflow's own checkout — so PR creation failed for the first repo it tried to bump.

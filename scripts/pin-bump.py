@@ -359,6 +359,11 @@ def _apply_pin_bump(
             "gh",
             "pr",
             "list",
+            # Explicit --repo: every git call above targets the clone with
+            # `-C`, but gh resolves the repository from the CWD, which is the
+            # workflow's own checkout, not this repo's clone.
+            "--repo",
+            f"{owner}/{repo}",
             "--head",
             bump_branch,
             "--base",
@@ -380,6 +385,8 @@ def _apply_pin_bump(
             "gh",
             "pr",
             "create",
+            "--repo",
+            f"{owner}/{repo}",
             "--title",
             "chore: bump first-party git pin revs",
             "--body",
