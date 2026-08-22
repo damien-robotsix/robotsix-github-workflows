@@ -65,7 +65,6 @@ jobs:
         # pins moved, so there is no fixed `repositories:` list to scope to.
         # Scope is limited the other way instead — contents:write and
         # pull-requests:write only, and the token is revoked at job cleanup.
-        # zizmor: ignore[github-app]
         id: app-token
         uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349  # v2.2.2
         with:
@@ -76,7 +75,7 @@ jobs:
           # the action then scopes the token to the calling repository and
           # every cross-repo push 403s ("Permission to <repo> denied to
           # <app>[bot]").
-          owner: ${{ inputs.owner || github.repository_owner }}
+          owner: ${{ inputs.owner || github.repository_owner }}  # zizmor: ignore[github-app]
           permission-contents: write
           permission-pull-requests: write
 
