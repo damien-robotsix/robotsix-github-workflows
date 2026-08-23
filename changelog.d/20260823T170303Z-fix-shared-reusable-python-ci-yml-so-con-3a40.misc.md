@@ -1,0 +1,1 @@
+Fix shared `python-ci.yml` reusable workflow: restore correct checkout-first step ordering (the coverage-floor enforcement step was accidentally moved before checkout during composite-action extraction), and ensure `coverage combine` can run by provisioning `coverage` ephemerally via `--with coverage` so the `.coverage` database is always created after parallel (xdist) test runs.
