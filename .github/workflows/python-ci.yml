@@ -116,6 +116,12 @@ jobs:
       # unaffected — their clone needs no token).
       contents: read
     steps:
+      - uses: ./.github/actions/python-setup
+        with:
+          python-version: ${{ inputs.python-version }}
+          uv-version: ${{ inputs.uv-version }}
+          install-extras: ${{ inputs.install-extras }}
+
       - name: Enforce coverage floor (hard minimum 80)
         # The fleet-wide coverage minimum lives here, not in per-repo
         # thresholds. Callers may raise the bar above 80 but cannot lower
@@ -131,12 +137,6 @@ jobs:
             echo "::error::coverage-threshold=${COVERAGE_THRESHOLD} is below the fleet-wide hard minimum of 80. Either omit the input (default: 80) or set a value ≥ 80."
             exit 1
           fi
-
-      - uses: ./.github/actions/python-setup
-        with:
-          python-version: ${{ inputs.python-version }}
-          uv-version: ${{ inputs.uv-version }}
-          install-extras: ${{ inputs.install-extras }}
 
       - name: deptry (dependency hygiene)
         if: ${{ inputs.run-deptry }}
@@ -266,7 +266,7 @@ jobs:
         # files produced by pytest-cov with parallel=true into a single
         # .coverage database.  In non-parallel mode there is nothing to
         # combine and coverage exits 1 — || true makes this a no-op.
-        run: uv run coverage combine || true
+        run: uv run --with coverage coverage combine || true
 
       - name: Assert coverage database exists
         # coverage.xml is a *report*, not a data file — every downstream
@@ -372,6 +372,12 @@ jobs:
     permissions:
       contents: read
     steps:
+      - uses: ./.github/actions/python-setup
+        with:
+          python-version: ${{ inputs.python-version }}
+          uv-version: ${{ inputs.uv-version }}
+          install-extras: ${{ inputs.install-extras }}
+
       - name: Enforce coverage floor (hard minimum 80)
         env:
           COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
@@ -380,12 +386,6 @@ jobs:
             echo "::error::coverage-threshold=${COVERAGE_THRESHOLD} is below the fleet-wide hard minimum of 80. Either omit the input (default: 80) or set a value ≥ 80."
             exit 1
           fi
-
-      - uses: ./.github/actions/python-setup
-        with:
-          python-version: ${{ inputs.python-version }}
-          uv-version: ${{ inputs.uv-version }}
-          install-extras: ${{ inputs.install-extras }}
 
       - name: Run tests
         env:
@@ -406,7 +406,7 @@ jobs:
         # files produced by pytest-cov with parallel=true into a single
         # .coverage database.  In non-parallel mode there is nothing to
         # combine and coverage exits 1 — || true makes this a no-op.
-        run: uv run coverage combine || true
+        run: uv run --with coverage coverage combine || true
 
       - name: Assert coverage database exists
         # coverage.xml is a *report*, not a data file — every downstream
