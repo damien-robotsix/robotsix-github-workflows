@@ -33,12 +33,14 @@ try:
 except ImportError:
     import subprocess
 
-    subprocess.check_call(
-        [sys.executable, "-m", "pip", "install", "--quiet", "pyyaml"]
-    )
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "--quiet", "pyyaml"])
     import yaml
 
 _LOCAL_ACTION_PREFIX = "./.github/actions/"
+# Absolute prefix for this repo's own composite actions when referenced
+# from reusable workflows (which resolve ./  against the *caller* repo,
+# not the workflow repo).  The @<sha> suffix is stripped during matching.
+_OWN_REPO_ACTION_PREFIX = "damien-robotsix/robotsix-github-workflows/.github/actions/"
 
 
 def _action_file_exists(actions_dir: str, name: str) -> bool:
@@ -50,7 +52,12 @@ def _action_file_exists(actions_dir: str, name: str) -> bool:
 
 
 def _collect_local_refs_from_doc(doc: object) -> list[str]:
-    """Collect every ``uses: ./.github/actions/...`` value from a parsed doc."""
+    """Collect every local (or own-repo absolute) action reference from a parsed doc.
+
+    Returns action *names* (e.g. ``"python-setup"``) for both:
+    - ``uses: ./.github/actions/<name>``
+    - ``uses: damien-robotsix/robotsix-github-workflows/.github/actions/<name>@<sha>``
+    """
     refs: list[str] = []
     if not isinstance(doc, dict):
         return refs
@@ -69,8 +76,16 @@ def _collect_local_refs_from_doc(doc: object) -> list[str]:
             if not isinstance(step, dict):
                 continue
             uses = step.get("uses")
-            if isinstance(uses, str) and uses.startswith(_LOCAL_ACTION_PREFIX):
-                refs.append(uses)
+            if not isinstance(uses, str):
+                continue
+            if uses.startswith(_LOCAL_ACTION_PREFIX):
+                name = uses[len(_LOCAL_ACTION_PREFIX) :]
+                refs.append(name)
+            elif uses.startswith(_OWN_REPO_ACTION_PREFIX):
+                # Strip prefix and optional @<sha> suffix
+                rest = uses[len(_OWN_REPO_ACTION_PREFIX) :]
+                name = rest.split("@", 1)[0]
+                refs.append(name)
 
     return refs
 
@@ -108,18 +123,15 @@ def check(
                 errors.append(f"{path}: invalid YAML — {exc}")
                 continue
 
-        for uses in _collect_local_refs_from_doc(doc):
-            name = uses[len(_LOCAL_ACTION_PREFIX) :]
+        for name in _collect_local_refs_from_doc(doc):
             if not name or "/" in name:
-                errors.append(
-                    f"{path}: invalid local action reference '{uses}'"
-                )
+                errors.append(f"{path}: invalid local action reference '{name}'")
                 continue
 
             referenced.add(name)
             if not _action_file_exists(actions_dir, name):
                 errors.append(
-                    f"{path}: references {_LOCAL_ACTION_PREFIX}{name} but "
+                    f"{path}: references action '{name}' but "
                     f"{actions_dir}/{name}/action.yml (or action.yaml) "
                     f"does not exist"
                 )

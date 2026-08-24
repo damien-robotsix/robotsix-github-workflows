@@ -93,7 +93,22 @@ class TestCollectLocalRefsFromDoc:
                 }
             }
         }
-        assert _collect_local_refs_from_doc(doc) == ["./.github/actions/foo"]
+        assert _collect_local_refs_from_doc(doc) == ["foo"]
+
+    def test_collects_own_repo_absolute_refs(self) -> None:
+        doc = {
+            "jobs": {
+                "a": {
+                    "steps": [
+                        {
+                            "uses": "damien-robotsix/robotsix-github-workflows/.github/actions/python-setup@abc123"
+                        },
+                        {"uses": "actions/checkout@v4"},
+                    ]
+                }
+            }
+        }
+        assert _collect_local_refs_from_doc(doc) == ["python-setup"]
 
     def test_non_dict_returns_empty(self) -> None:
         assert _collect_local_refs_from_doc(None) == []
@@ -133,26 +148,20 @@ class TestCheck:
         actions_dir = tmp_path / "actions"
         _write_workflow(wf_dir, "ci.yml", _WORKFLOW.format(action="foo"))
         _write_action(actions_dir, "foo", "action.yml")
-        assert (
-            check(workflow_dir=str(wf_dir), actions_dir=str(actions_dir)) == 0
-        )
+        assert check(workflow_dir=str(wf_dir), actions_dir=str(actions_dir)) == 0
 
     def test_valid_reference_action_yaml(self, tmp_path: Path) -> None:
         wf_dir = tmp_path / "workflows"
         actions_dir = tmp_path / "actions"
         _write_workflow(wf_dir, "ci.yml", _WORKFLOW.format(action="foo"))
         _write_action(actions_dir, "foo", "action.yaml")
-        assert (
-            check(workflow_dir=str(wf_dir), actions_dir=str(actions_dir)) == 0
-        )
+        assert check(workflow_dir=str(wf_dir), actions_dir=str(actions_dir)) == 0
 
     def test_missing_action_fails(self, tmp_path: Path, capsys) -> None:
         wf_dir = tmp_path / "workflows"
         actions_dir = tmp_path / "actions"
         _write_workflow(wf_dir, "ci.yml", _WORKFLOW.format(action="foo"))
-        assert (
-            check(workflow_dir=str(wf_dir), actions_dir=str(actions_dir)) == 1
-        )
+        assert check(workflow_dir=str(wf_dir), actions_dir=str(actions_dir)) == 1
         captured = capsys.readouterr()
         assert "foo" in captured.err
 
@@ -199,9 +208,7 @@ class TestCheck:
         _write_workflow(wf_dir, "ci.yml", _WORKFLOW.format(action="foo"))
         _write_action(actions_dir, "foo")
         _write_action(actions_dir, "orphan")
-        assert (
-            check(workflow_dir=str(wf_dir), actions_dir=str(actions_dir)) == 0
-        )
+        assert check(workflow_dir=str(wf_dir), actions_dir=str(actions_dir)) == 0
 
     def test_orphan_check_flags_unreferenced_action(
         self, tmp_path: Path, capsys
@@ -222,9 +229,7 @@ class TestCheck:
         captured = capsys.readouterr()
         assert "orphan" in captured.err
 
-    def test_orphan_check_passes_when_all_referenced(
-        self, tmp_path: Path
-    ) -> None:
+    def test_orphan_check_passes_when_all_referenced(self, tmp_path: Path) -> None:
         wf_dir = tmp_path / "workflows"
         actions_dir = tmp_path / "actions"
         _write_workflow(wf_dir, "ci.yml", _WORKFLOW.format(action="foo"))
