@@ -1,0 +1,1 @@
+Fix python-ci.yml composite action reference: replace relative `./.github/actions/python-setup` with absolute `damien-robotsix/robotsix-github-workflows/.github/actions/python-setup@<sha>` so consumer repos resolve the action correctly. Updated `check_local_action_refs.py` to also recognize own-repo absolute references for orphan detection.
