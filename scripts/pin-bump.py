@@ -207,10 +207,12 @@ def per_repo(pyproject_path: Path, filter_packages: list[str] | None = None) -> 
 
 def _collect_fleet_pins(
     owner: str, env: dict[str, str]
-) -> dict[str, list[tuple[str, str, str]]]:
+) -> tuple[dict[str, list[tuple[str, str, str]]], list[str]]:
     """Enumerate fleet repos and collect all git-sourced pins.
 
-    Returns a mapping of ``git_url → [(repo_name, pkg_name, current_rev)]``.
+    Returns ``(dep_map, skipped_repos)`` where *dep_map* maps
+    ``git_url → [(repo_name, pkg_name, current_rev)]`` and
+    *skipped_repos* lists repos that have no git-sourced pins.
     """
     print(f"Enumerating non-archived, non-fork repos owned by {owner} …")
     repo_list_json = run(
@@ -231,6 +233,7 @@ def _collect_fleet_pins(
     print(f"Found {len(repo_names)} repos.")
 
     dep_map: dict[str, list[tuple[str, str, str]]] = {}
+    skipped_repos: list[str] = []
 
     for repo in repo_names:
         print(f"  Fetching pyproject.toml from {owner}/{repo} …")
@@ -243,6 +246,7 @@ def _collect_fleet_pins(
                 env=env,
             )
         except subprocess.CalledProcessError:
+            skipped_repos.append(repo)
             continue  # no pyproject.toml — skip
 
         toml_text = base64.b64decode(content).decode()
@@ -250,31 +254,43 @@ def _collect_fleet_pins(
             data = tomllib.loads(toml_text)
         except Exception:
             print(f"    Failed to parse pyproject.toml for {repo} — skipping")
+            skipped_repos.append(repo)
             continue
 
         raw = data.get("tool", {}).get("uv", {}).get("sources", {})
+        has_git_pin = False
         for pkg, spec in raw.items():
             if isinstance(spec, dict) and "git" in spec:
                 rev = spec.get("rev")
                 if rev and isinstance(rev, str) and len(rev) == 40:
+                    has_git_pin = True
                     dep_map.setdefault(spec["git"], []).append((repo, pkg, rev))
+        if not has_git_pin:
+            skipped_repos.append(repo)
 
-    return dep_map
+    return dep_map, skipped_repos
 
 
 def _resolve_latest_shas(
     dep_map: dict[str, list[tuple[str, str, str]]],
-) -> dict[str, str]:
+) -> tuple[dict[str, str], list[tuple[str, str]]]:
     """Resolve the latest HEAD SHA for each unique git URL.
 
-    Returns ``{git_url: sha}``.
+    Returns ``(latest_map, unresolved)`` where *unresolved* lists
+    ``(git_url, error_message)`` for each URL that could not be
+    resolved.
     """
     print(f"\nResolving latest SHAs for {len(dep_map)} unique git URLs …")
     latest_map: dict[str, str] = {}
+    unresolved: list[tuple[str, str]] = []
     for git_url in dep_map:
-        latest_map[git_url] = resolve_default_branch_head(git_url)
-        print(f"  {git_url}: {latest_map[git_url][:8]}")
-    return latest_map
+        try:
+            latest_map[git_url] = resolve_default_branch_head(git_url)
+            print(f"  {git_url}: {latest_map[git_url][:8]}")
+        except Exception as exc:
+            print(f"  FAILED {git_url}: {exc}", file=sys.stderr)
+            unresolved.append((git_url, str(exc)))
+    return latest_map, unresolved
 
 
 def _compute_repo_bumps(
@@ -284,10 +300,15 @@ def _compute_repo_bumps(
     """Determine which repos need pin bumps.
 
     Returns ``{repo_name: [(pkg, new_sha)]}`` for repos with stale pins.
+
+    Git URLs that could not be resolved are silently skipped (their pins
+    are not bumped).
     """
     repo_bumps: dict[str, list[tuple[str, str]]] = {}
     for git_url, pins in dep_map.items():
-        new_sha = latest_map[git_url]
+        new_sha = latest_map.get(git_url)
+        if new_sha is None:
+            continue  # resolution failed — skip this dependency
         for repo, pkg, current_rev in pins:
             if current_rev != new_sha:
                 repo_bumps.setdefault(repo, []).append((pkg, new_sha))
@@ -404,6 +425,74 @@ def _apply_pin_bump(
         print(f"  PR created for {owner}/{repo}")
 
 
+def _write_sweep_summary(
+    owner: str,
+    bumped: list[str],
+    failed: list[tuple[str, str]],
+    skipped: list[str],
+    unresolved_urls: list[tuple[str, str]],
+) -> None:
+    """Write the sweep summary to stdout and ``$GITHUB_STEP_SUMMARY``."""
+    lines: list[str] = []
+    lines.append("## Pin Bump Sweep Summary")
+    lines.append("")
+
+    if bumped:
+        lines.append(f"### Bumped ({len(bumped)})")
+        for r in bumped:
+            lines.append(f"- {owner}/{r}")
+        lines.append("")
+    else:
+        lines.append("### Bumped")
+        lines.append("(none)")
+        lines.append("")
+
+    if failed:
+        lines.append(f"### Failed ({len(failed)})")
+        for r, reason in failed:
+            lines.append(f"- {owner}/{r}: {reason}")
+        lines.append("")
+    else:
+        lines.append("### Failed")
+        lines.append("(none)")
+        lines.append("")
+
+    if skipped:
+        lines.append(f"### Skipped — no git pins ({len(skipped)})")
+        for r in skipped:
+            lines.append(f"- {owner}/{r}")
+        lines.append("")
+    else:
+        lines.append("### Skipped — no git pins")
+        lines.append("(none)")
+        lines.append("")
+
+    if unresolved_urls:
+        lines.append(f"### Unresolved dependencies ({len(unresolved_urls)})")
+        for url, reason in unresolved_urls:
+            lines.append(f"- {url}: {reason}")
+        lines.append("")
+    else:
+        lines.append("### Unresolved dependencies")
+        lines.append("(none)")
+        lines.append("")
+
+    markdown = "\n".join(lines)
+
+    # Print to stdout (also visible in raw logs)
+    print("\n=== Sweep summary ===")
+    print(markdown)
+
+    # Append to GITHUB_STEP_SUMMARY for the job summary page
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary_path:
+        with open(summary_path, "a") as fh:
+            fh.write(markdown + "\n")
+
+
+
+
+
 # ---------------------------------------------------------------------------
 # Sweep (coherent-set) mode — orchestrator
 # ---------------------------------------------------------------------------
@@ -420,16 +509,22 @@ def sweep(owner: str, token_env: str) -> int:
 
     env = {**os.environ, "GH_TOKEN": token}
 
-    dep_map = _collect_fleet_pins(owner, env)
+    dep_map, skipped_repos = _collect_fleet_pins(owner, env)
     if not dep_map:
         print("No git-sourced pins found across fleet.")
+        if skipped_repos:
+            print(f"Skipped {len(skipped_repos)} repo(s) with no git pins:")
+            for r in skipped_repos:
+                print(f"  - {owner}/{r}")
+        _write_sweep_summary(owner, [], [], skipped_repos, [])
         return 0
 
-    latest_map = _resolve_latest_shas(dep_map)
+    latest_map, unresolved_urls = _resolve_latest_shas(dep_map)
 
     repo_bumps = _compute_repo_bumps(dep_map, latest_map)
     if not repo_bumps:
         print("All fleet pins are already current.")
+        _write_sweep_summary(owner, [], [], skipped_repos, unresolved_urls)
         return 0
 
     print(f"\n{len(repo_bumps)} repo(s) need pin bumps.")
@@ -444,34 +539,7 @@ def sweep(owner: str, token_env: str) -> int:
                 failed.append((repo, str(exc)))
                 print(f"\n  FAILED {owner}/{repo}: {exc}", file=sys.stderr)
 
-    # Compute already-current repos (pinned but no bumps needed)
-    all_pinned_repos: set[str] = set()
-    for pins in dep_map.values():
-        for repo_name, _, _ in pins:
-            all_pinned_repos.add(repo_name)
-    already_current = sorted(all_pinned_repos - set(repo_bumps.keys()))
-
-    # Print summary
-    print("\n=== Sweep summary ===")
-    if bumped:
-        print(f"Bumped ({len(bumped)}):")
-        for r in bumped:
-            print(f"  - {owner}/{r}")
-    else:
-        print("Bumped: (none)")
-    if already_current:
-        print(f"Already current ({len(already_current)}):")
-        for r in already_current:
-            print(f"  - {owner}/{r}")
-    else:
-        print("Already current: (none)")
-    if failed:
-        print(f"Failed ({len(failed)}):")
-        for r, reason in failed:
-            print(f"  - {owner}/{r}: {reason}")
-    else:
-        print("Failed: (none)")
-
+    _write_sweep_summary(owner, bumped, failed, skipped_repos, unresolved_urls)
     return 1 if failed else 0
 
 
