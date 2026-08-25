@@ -210,7 +210,17 @@ jobs:
         # CI checks out in detached HEAD with only the remote-tracking
         # ref available, so point suggest's git-diff at origin/main
         # (the default "main" is not a local branch here).
-        run: uv run --with mypy-baseline mypy-baseline suggest --exit-zero --default-branch origin/main
+        #
+        # `mypy-baseline suggest` raises RuntimeError('baseline is empty') on a
+        # repo with nothing left to burn down, and that fires before
+        # --exit-zero can apply — so a fully mypy-clean repo could not adopt
+        # this workflow at all. There is nothing to nudge in that case: skip.
+        run: |
+          if [ ! -s mypy-baseline.txt ]; then
+            echo "mypy-baseline.txt is empty — nothing to burn down, skipping."
+            exit 0
+          fi
+          uv run --with mypy-baseline mypy-baseline suggest --exit-zero --default-branch origin/main
 
       - name: Mypy (static type check)
         if: ${{ !inputs.mypy-advisory }}
