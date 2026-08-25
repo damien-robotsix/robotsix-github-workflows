@@ -97,7 +97,7 @@ jobs:
       contents: write       # push bump branch
       pull-requests: write  # gh pr create
     steps:
-      - uses: ./.github/actions/bump-setup
+      - uses: damien-robotsix/robotsix-github-workflows/.github/actions/bump-setup@35150afd6879d382fd349c1b74af556f4f1b0214
         id: bump-setup
         with:
           app-id: ${{ inputs.app-id }}
@@ -163,7 +163,7 @@ jobs:
           # shellcheck disable=SC2086
           python3 _workflow-lib/scripts/pin-bump.py per-repo $PKG_ARGS
 
-      - uses: ./.github/actions/bump-commit-pr
+      - uses: damien-robotsix/robotsix-github-workflows/.github/actions/bump-commit-pr@35150afd6879d382fd349c1b74af556f4f1b0214
         with:
           token: ${{ steps.bump-setup.outputs.token }}
           bump-branch: ${{ inputs.bump-branch }}

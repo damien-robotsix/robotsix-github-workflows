@@ -91,7 +91,7 @@ jobs:
       # supposed to ignore. `if: always()` so we still surface findings
       # in the Security tab even when the gate above trips.
       - name: Trivy vulnerability scan (SARIF for code-scanning)
-        uses: ./.github/actions/trivy-sarif
+        uses: damien-robotsix/robotsix-github-workflows/.github/actions/trivy-sarif@35150afd6879d382fd349c1b74af556f4f1b0214
         with:
           image-ref: ${{ steps.scan-ref.outputs.image }}
           ignore-unfixed: true
