@@ -148,6 +148,27 @@ def rewrite_revs(pyproject_path: Path, bumps: dict[str, str]) -> None:
 
 
 # ---------------------------------------------------------------------------
+# URL normalisation
+# ---------------------------------------------------------------------------
+
+
+def _normalize_git_url(url: str) -> str:
+    """Normalize a git URL to a canonical HTTPS form for comparison.
+
+    Handles both SSH (``git@github.com:org/repo.git``) and HTTPS URLs.
+    Strips trailing ``.git`` suffix and trailing slashes.
+    """
+    url = url.strip()
+    # SSH → HTTPS: git@github.com:org/repo.git → https://github.com/org/repo
+    ssh_match = re.match(r"git@([^:]+):(.+?)(?:\.git)?$", url)
+    if ssh_match:
+        return f"https://{ssh_match.group(1)}/{ssh_match.group(2)}"
+    # HTTPS: strip .git suffix and trailing slash
+    url = url.removesuffix(".git")
+    return url.rstrip("/")
+
+
+# ---------------------------------------------------------------------------
 # Per-repo mode
 # ---------------------------------------------------------------------------
 
@@ -207,12 +228,13 @@ def per_repo(pyproject_path: Path, filter_packages: list[str] | None = None) -> 
 
 def _collect_fleet_pins(
     owner: str, env: dict[str, str]
-) -> tuple[dict[str, list[tuple[str, str, str]]], list[str]]:
+) -> tuple[dict[str, list[tuple[str, str, str]]], list[str], list[str]]:
     """Enumerate fleet repos and collect all git-sourced pins.
 
-    Returns ``(dep_map, skipped_repos)`` where *dep_map* maps
-    ``git_url → [(repo_name, pkg_name, current_rev)]`` and
-    *skipped_repos* lists repos that have no git-sourced pins.
+    Returns ``(dep_map, skipped_repos, all_fleet_repos)`` where *dep_map*
+    maps ``git_url → [(repo_name, pkg_name, current_rev)]``,
+    *skipped_repos* lists repos that have no git-sourced pins, and
+    *all_fleet_repos* is the complete list of fleet repo names.
     """
     print(f"Enumerating non-archived, non-fork repos owned by {owner} …")
     repo_list_json = run(
@@ -268,7 +290,7 @@ def _collect_fleet_pins(
         if not has_git_pin:
             skipped_repos.append(repo)
 
-    return dep_map, skipped_repos
+    return dep_map, skipped_repos, repo_names
 
 
 def _resolve_latest_shas(
@@ -315,14 +337,113 @@ def _compute_repo_bumps(
     return repo_bumps
 
 
+# ---------------------------------------------------------------------------
+# First-party dependency graph & topological ordering
+# ---------------------------------------------------------------------------
+
+
+def _build_first_party_graph(
+    dep_map: dict[str, list[tuple[str, str, str]]],
+    all_fleet_repos: list[str],
+    owner: str,
+) -> dict[str, set[str]]:
+    """Build first-party dependency graph from collected pins.
+
+    Returns ``{repo_name: set of fleet repo names it pins}``.  Only
+    includes edges where the pinned git URL matches a fleet repo.
+    """
+    # Map normalized git URL → fleet repo name
+    fleet_urls: dict[str, str] = {}
+    for repo_name in all_fleet_repos:
+        canonical = f"https://github.com/{owner}/{repo_name}.git"
+        fleet_urls[_normalize_git_url(canonical)] = repo_name
+
+    graph: dict[str, set[str]] = {}
+    for git_url, pins in dep_map.items():
+        normalized = _normalize_git_url(git_url)
+        dep_repo = fleet_urls.get(normalized)
+        if dep_repo is None:
+            continue
+        for repo_name, _pkg_name, _rev in pins:
+            if repo_name != dep_repo:  # no self-loops
+                graph.setdefault(repo_name, set()).add(dep_repo)
+
+    return graph
+
+
+def _topological_sort(
+    graph: dict[str, set[str]],
+    repos: set[str],
+) -> tuple[list[str], set[str]]:
+    """Topologically sort *repos* by first-party dependencies.
+
+    Returns ``(sorted_repos, cycle_repos)`` where *cycle_repos* is the
+    set of repos involved in dependency cycles (and therefore excluded
+    from *sorted_repos*).  Leaves (no in-set dependencies) come first.
+    """
+    # In-degree: number of in-set dependencies each repo has
+    in_degree: dict[str, int] = {}
+    for repo in repos:
+        in_degree[repo] = len(graph.get(repo, set()) & repos)
+
+    # Kahn's algorithm with deterministic ordering
+    queue = sorted(r for r in repos if in_degree.get(r, 0) == 0)
+    sorted_repos: list[str] = []
+
+    while queue:
+        repo = queue.pop(0)
+        sorted_repos.append(repo)
+        for other in sorted(repos):
+            if repo in graph.get(other, set()):
+                in_degree[other] -= 1
+                if in_degree[other] == 0:
+                    queue.append(other)
+                    queue.sort()
+
+    cycle_repos = repos - set(sorted_repos)
+    return sorted_repos, cycle_repos
+
+
+def _get_fleet_dep_bumps(
+    repo: str,
+    fleet_deps: set[str],
+    pushed_shas: dict[str, str],
+    dep_map: dict[str, list[tuple[str, str, str]]],
+    owner: str,
+) -> list[tuple[str, str]]:
+    """Return additional pin bumps for fleet deps already pushed in this sweep.
+
+    When a first-party dependency was bumped earlier in the sweep, its new
+    commit lives on the ``pin-bump/sweep`` PR branch.  Dependents must pin
+    that exact commit so their transitive resolution stays coherent.
+    """
+    bumps: list[tuple[str, str]] = []
+    for dep_repo in fleet_deps:
+        if dep_repo not in pushed_shas:
+            continue
+        new_sha = pushed_shas[dep_repo]
+        dep_url_norm = _normalize_git_url(f"https://github.com/{owner}/{dep_repo}.git")
+        for git_url, pins in dep_map.items():
+            if _normalize_git_url(git_url) == dep_url_norm:
+                for pin_repo, pkg_name, current_rev in pins:
+                    if pin_repo == repo and current_rev != new_sha:
+                        bumps.append((pkg_name, new_sha))
+                break
+    return bumps
+
+
 def _apply_pin_bump(
     owner: str,
     repo: str,
     bumps: list[tuple[str, str]],
     token: str,
     tmpdir: str,
-) -> None:
-    """Clone a repo, rewrite pin revs, lock, commit, push, and open a PR."""
+) -> str | None:
+    """Clone a repo, rewrite pin revs, lock, commit, push, and open a PR.
+
+    Returns the commit SHA of the pushed branch, or ``None`` if the
+    repo was skipped (e.g. missing ``pyproject.toml``).
+    """
     print(f"\n--- Processing {owner}/{repo} ---")
     repo_dir = Path(tmpdir) / repo
     clone_url = f"https://x-access-token:{token}@github.com/{owner}/{repo}.git"
@@ -342,7 +463,7 @@ def _apply_pin_bump(
     pyproject = repo_dir / "pyproject.toml"
     if not pyproject.exists():
         print(f"  pyproject.toml not found in cloned {repo} — skipping")
-        return
+        return None
 
     bump_dict = dict(bumps)
     rewrite_revs(pyproject, bump_dict)
@@ -371,6 +492,11 @@ def _apply_pin_bump(
         "chore: bump first-party git pin revs",
     )
     run("git", "-C", str(repo_dir), "push", "--force", "origin", bump_branch)
+
+    # Capture the pushed commit SHA so dependents can pin to it
+    pushed_sha = run(
+        "git", "-C", str(repo_dir), "rev-parse", "HEAD", capture_output=True
+    ).stdout.strip()
 
     # Open or reuse PR
     pr_env = {**os.environ, "GH_TOKEN": token}
@@ -424,6 +550,8 @@ def _apply_pin_bump(
         )
         print(f"  PR created for {owner}/{repo}")
 
+    return pushed_sha
+
 
 def _write_sweep_summary(
     owner: str,
@@ -431,6 +559,7 @@ def _write_sweep_summary(
     failed: list[tuple[str, str]],
     skipped: list[str],
     unresolved_urls: list[tuple[str, str]],
+    skipped_cycles: list[tuple[str, str]] | None = None,
 ) -> None:
     """Write the sweep summary to stdout and ``$GITHUB_STEP_SUMMARY``."""
     lines: list[str] = []
@@ -454,6 +583,16 @@ def _write_sweep_summary(
         lines.append("")
     else:
         lines.append("### Failed")
+        lines.append("(none)")
+        lines.append("")
+
+    if skipped_cycles:
+        lines.append(f"### Skipped — dependency cycles ({len(skipped_cycles)})")
+        for r, reason in skipped_cycles:
+            lines.append(f"- {owner}/{r}: {reason}")
+        lines.append("")
+    else:
+        lines.append("### Skipped — dependency cycles")
         lines.append("(none)")
         lines.append("")
 
@@ -490,16 +629,18 @@ def _write_sweep_summary(
             fh.write(markdown + "\n")
 
 
-
-
-
 # ---------------------------------------------------------------------------
 # Sweep (coherent-set) mode — orchestrator
 # ---------------------------------------------------------------------------
 
 
 def sweep(owner: str, token_env: str) -> int:
-    """Enumerate fleet repos, resolve pins once, open PRs for affected repos."""
+    """Enumerate fleet repos, resolve pins once, open PRs for affected repos.
+
+    Repos are processed in topological order so that a dependent always
+    pins a commit whose own first-party pins already match.  Repos
+    involved in dependency cycles are skipped with an explicit message.
+    """
     token = os.environ.get(token_env)
     if not token:
         raise RuntimeError(
@@ -509,14 +650,14 @@ def sweep(owner: str, token_env: str) -> int:
 
     env = {**os.environ, "GH_TOKEN": token}
 
-    dep_map, skipped_repos = _collect_fleet_pins(owner, env)
+    dep_map, skipped_repos, all_fleet_repos = _collect_fleet_pins(owner, env)
     if not dep_map:
         print("No git-sourced pins found across fleet.")
         if skipped_repos:
             print(f"Skipped {len(skipped_repos)} repo(s) with no git pins:")
             for r in skipped_repos:
                 print(f"  - {owner}/{r}")
-        _write_sweep_summary(owner, [], [], skipped_repos, [])
+        _write_sweep_summary(owner, [], [], skipped_repos, [], [])
         return 0
 
     latest_map, unresolved_urls = _resolve_latest_shas(dep_map)
@@ -524,22 +665,82 @@ def sweep(owner: str, token_env: str) -> int:
     repo_bumps = _compute_repo_bumps(dep_map, latest_map)
     if not repo_bumps:
         print("All fleet pins are already current.")
-        _write_sweep_summary(owner, [], [], skipped_repos, unresolved_urls)
+        _write_sweep_summary(owner, [], [], skipped_repos, unresolved_urls, [])
         return 0
+
+    # Build first-party dependency graph and topologically sort so that
+    # leaves (repos that don't pin other fleet repos) are bumped first.
+    first_party_graph = _build_first_party_graph(dep_map, all_fleet_repos, owner)
+    repos_needing_bumps = set(repo_bumps.keys())
+    sorted_repos, cycle_repos = _topological_sort(
+        first_party_graph, repos_needing_bumps
+    )
+
+    if cycle_repos:
+        print(
+            f"\nWarning: {len(cycle_repos)} repo(s) in first-party "
+            "dependency cycles — will be skipped:"
+        )
+        for repo in sorted(cycle_repos):
+            cycle_deps = first_party_graph.get(repo, set()) & cycle_repos
+            print(f"  {repo} ↔ {', '.join(sorted(cycle_deps))}")
 
     print(f"\n{len(repo_bumps)} repo(s) need pin bumps.")
     bumped: list[str] = []
     failed: list[tuple[str, str]] = []
+    skipped_cycles: list[tuple[str, str]] = []
+    # Track the commit SHA pushed to each repo's PR branch so that
+    # dependents can pin to it for coherent transitive resolution.
+    pushed_shas: dict[str, str] = {}
+    failed_or_skipped: set[str] = set(cycle_repos)
+
     with tempfile.TemporaryDirectory() as tmpdir:
-        for repo, bumps in repo_bumps.items():
+        # Process in topological order — leaves first
+        for repo in sorted_repos:
+            # If any fleet dep was not successfully processed, skip this
+            # repo to avoid conflicting transitive pins.
+            deps = first_party_graph.get(repo, set())
+            unprocessed_deps = deps & failed_or_skipped
+            if unprocessed_deps:
+                dep_names = ", ".join(sorted(unprocessed_deps))
+                msg = (
+                    f"Skipped: depends on {dep_names} which could not be "
+                    f"bumped in this sweep"
+                )
+                skipped_cycles.append((repo, msg))
+                failed_or_skipped.add(repo)
+                print(f"\n  SKIP {owner}/{repo}: {msg}")
+                continue
+
+            # Start with bumps from stale default-branch pins
+            bumps_dict = dict(repo_bumps.get(repo, []))
+
+            # Override with fleet dep bumps — when a first-party dep was
+            # already pushed in this sweep, pin to its PR branch SHA so
+            # transitive resolution stays coherent.  This takes precedence
+            # over the default-branch HEAD computed by _compute_repo_bumps.
+            fleet_bumps = _get_fleet_dep_bumps(repo, deps, pushed_shas, dep_map, owner)
+            for pkg, sha in fleet_bumps:
+                bumps_dict[pkg] = sha
+
+            bumps = list(bumps_dict.items())
+
+            if not bumps:
+                continue
+
             try:
-                _apply_pin_bump(owner, repo, bumps, token, tmpdir)
+                pushed_sha = _apply_pin_bump(owner, repo, bumps, token, tmpdir)
+                if pushed_sha is not None:
+                    pushed_shas[repo] = pushed_sha
                 bumped.append(repo)
             except Exception as exc:
                 failed.append((repo, str(exc)))
+                failed_or_skipped.add(repo)
                 print(f"\n  FAILED {owner}/{repo}: {exc}", file=sys.stderr)
 
-    _write_sweep_summary(owner, bumped, failed, skipped_repos, unresolved_urls)
+    _write_sweep_summary(
+        owner, bumped, failed, skipped_repos, unresolved_urls, skipped_cycles
+    )
     return 1 if failed else 0
 
 
