@@ -15,9 +15,7 @@ import pytest
 # Load the pin-bump module (filename contains a hyphen — can't use plain import)
 # ---------------------------------------------------------------------------
 _scripts_dir = Path(__file__).resolve().parent.parent / "scripts"
-_spec = importlib.util.spec_from_file_location(
-    "pin_bump", _scripts_dir / "pin-bump.py"
-)
+_spec = importlib.util.spec_from_file_location("pin_bump", _scripts_dir / "pin-bump.py")
 assert _spec is not None and _spec.loader is not None
 _pin_bump = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_pin_bump)
@@ -31,6 +29,10 @@ _collect_fleet_pins = _pin_bump._collect_fleet_pins
 _resolve_latest_shas = _pin_bump._resolve_latest_shas
 _compute_repo_bumps = _pin_bump._compute_repo_bumps
 _apply_pin_bump = _pin_bump._apply_pin_bump
+_normalize_git_url = _pin_bump._normalize_git_url
+_build_first_party_graph = _pin_bump._build_first_party_graph
+_topological_sort = _pin_bump._topological_sort
+_get_fleet_dep_bumps = _pin_bump._get_fleet_dep_bumps
 sweep = _pin_bump.sweep
 
 # ---------------------------------------------------------------------------
@@ -57,7 +59,8 @@ def _create_bare_repo(tmp_path: Path) -> tuple[Path, str]:
     repo_dir.mkdir()
     subprocess.run(
         ["git", "-C", str(repo_dir), "init", "--bare"],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     work_dir = tmp_path / "work"
     work_dir.mkdir()
@@ -67,7 +70,9 @@ def _create_bare_repo(tmp_path: Path) -> tuple[Path, str]:
     # Detect the default branch name
     branch = subprocess.run(
         ["git", "-C", str(work_dir), "branch", "--show-current"],
-        check=True, capture_output=True, text=True,
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
     (work_dir / "README.md").write_text("# test")
     subprocess.run(
@@ -80,19 +85,23 @@ def _create_bare_repo(tmp_path: Path) -> tuple[Path, str]:
     )
     subprocess.run(
         ["git", "-C", str(work_dir), "add", "README.md"],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     subprocess.run(
         ["git", "-C", str(work_dir), "commit", "-m", "init"],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     subprocess.run(
         ["git", "-C", str(work_dir), "remote", "add", "origin", str(repo_dir)],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     subprocess.run(
         ["git", "-C", str(work_dir), "push", "origin", branch],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     head = resolve_default_branch_head(f"file://{repo_dir}")
     return repo_dir, head
@@ -126,7 +135,9 @@ class TestParseGitSources:
             """,
         )
         result = parse_git_sources(tmp_pyproject)
-        assert result == {"mypkg": {"git": "https://github.com/org/mypkg.git", "rev": sha}}
+        assert result == {
+            "mypkg": {"git": "https://github.com/org/mypkg.git", "rev": sha}
+        }
 
     def test_git_source_without_rev_skipped(self, tmp_pyproject: Path) -> None:
         """Git source without rev is skipped."""
@@ -225,8 +236,8 @@ class TestRewriteRevs:
             tmp_pyproject,
             f"""
             [tool.uv.sources]
-            alpha = {{ git = "https://github.com/org/a.git", rev = "{"a"*40}" }}
-            beta  = {{ git = "https://github.com/org/b.git", rev = "{"b"*40}" }}
+            alpha = {{ git = "https://github.com/org/a.git", rev = "{"a" * 40}" }}
+            beta  = {{ git = "https://github.com/org/b.git", rev = "{"b" * 40}" }}
             """,
         )
         rewrite_revs(tmp_pyproject, {"alpha": "f" * 40, "beta": "e" * 40})
@@ -273,7 +284,7 @@ class TestRewriteRevs:
         )
         rewrite_revs(tmp_pyproject, {"mypkg": new_sha})
         text = tmp_pyproject.read_text()
-        assert '[project]' in text
+        assert "[project]" in text
         assert 'name = "test"' in text
         assert 'subdirectory = "pkg"' in text
         assert new_sha in text
@@ -345,20 +356,25 @@ class TestPerRepoIntegration:
         work_dir = tmp_path / "work"
         branch = subprocess.run(
             ["git", "-C", str(work_dir), "branch", "--show-current"],
-            check=True, capture_output=True, text=True,
+            check=True,
+            capture_output=True,
+            text=True,
         ).stdout.strip()
         (work_dir / "README.md").write_text("# dep v2")
         subprocess.run(
             ["git", "-C", str(work_dir), "add", "README.md"],
-            check=True, capture_output=True,
+            check=True,
+            capture_output=True,
         )
         subprocess.run(
             ["git", "-C", str(work_dir), "commit", "-m", "v2"],
-            check=True, capture_output=True,
+            check=True,
+            capture_output=True,
         )
         subprocess.run(
             ["git", "-C", str(work_dir), "push", "origin", branch],
-            check=True, capture_output=True,
+            check=True,
+            capture_output=True,
         )
         latest_head = resolve_default_branch_head(f"file://{dep_bare}")
         assert first_head != latest_head
@@ -381,9 +397,7 @@ class TestPerRepoIntegration:
         # 4. Monkeypatch run() to skip "uv lock"
         original_run = _pin_bump.run
 
-        def fake_run(
-            *args: str, **kwargs: object
-        ) -> subprocess.CompletedProcess[str]:
+        def fake_run(*args: str, **kwargs: object) -> subprocess.CompletedProcess[str]:
             if args and args[0] == "uv":
                 return subprocess.CompletedProcess(
                     args=args, returncode=0, stdout="", stderr=""
@@ -423,9 +437,7 @@ class TestPerRepoIntegration:
         # Monkeypatch run() to skip uv lock
         original_run = _pin_bump.run
 
-        def fake_run(
-            *args: str, **kwargs: object
-        ) -> subprocess.CompletedProcess[str]:
+        def fake_run(*args: str, **kwargs: object) -> subprocess.CompletedProcess[str]:
             if args and args[0] == "uv":
                 return subprocess.CompletedProcess(
                     args=args, returncode=0, stdout="", stderr=""
@@ -527,9 +539,7 @@ class TestComputeRepoBumps:
 class TestResolveLatestShas:
     """Tests for _resolve_latest_shas."""
 
-    def test_resolves_each_unique_url_once(
-        self, monkeypatch, capsys
-    ) -> None:
+    def test_resolves_each_unique_url_once(self, monkeypatch, capsys) -> None:
         """Each unique git URL is resolved exactly once via
         resolve_default_branch_head."""
         sha_a = "a" * 40
@@ -581,7 +591,9 @@ class TestCollectFleetPins:
             return subprocess.run(args, text=True, check=True, **kwargs)  # type: ignore[call-overload,no-any-return]
 
         monkeypatch.setattr(_pin_bump, "run", fake_run)
-        dep_map, skipped = _collect_fleet_pins("test-org", {"GH_TOKEN": "fake"})
+        dep_map, skipped, _all_repos = _collect_fleet_pins(
+            "test-org", {"GH_TOKEN": "fake"}
+        )
         assert dep_map == {}
 
     def test_repo_without_pyproject(self, monkeypatch) -> None:
@@ -602,7 +614,9 @@ class TestCollectFleetPins:
 
         monkeypatch.setattr(_pin_bump, "run", fake_run)
         monkeypatch.setattr(_pin_bump, "gh", fake_gh)
-        dep_map, skipped = _collect_fleet_pins("test-org", {"GH_TOKEN": "fake"})
+        dep_map, skipped, _all_repos = _collect_fleet_pins(
+            "test-org", {"GH_TOKEN": "fake"}
+        )
         assert dep_map == {}
 
     def test_repo_with_git_pins(self, monkeypatch) -> None:
@@ -629,7 +643,9 @@ class TestCollectFleetPins:
 
         monkeypatch.setattr(_pin_bump, "run", fake_run)
         monkeypatch.setattr(_pin_bump, "gh", fake_gh)
-        dep_map, skipped = _collect_fleet_pins("test-org", {"GH_TOKEN": "fake"})
+        dep_map, skipped, _all_repos = _collect_fleet_pins(
+            "test-org", {"GH_TOKEN": "fake"}
+        )
 
         expected_key = "https://github.com/org/dep.git"
         assert expected_key in dep_map
@@ -658,7 +674,9 @@ class TestCollectFleetPins:
 
         monkeypatch.setattr(_pin_bump, "run", fake_run)
         monkeypatch.setattr(_pin_bump, "gh", fake_gh)
-        dep_map, skipped = _collect_fleet_pins("test-org", {"GH_TOKEN": "fake"})
+        dep_map, skipped, _all_repos = _collect_fleet_pins(
+            "test-org", {"GH_TOKEN": "fake"}
+        )
         assert dep_map == {}
 
     def test_multiple_repos(self, monkeypatch) -> None:
@@ -696,7 +714,9 @@ class TestCollectFleetPins:
 
         monkeypatch.setattr(_pin_bump, "run", fake_run)
         monkeypatch.setattr(_pin_bump, "gh", fake_gh)
-        dep_map, skipped = _collect_fleet_pins("test-org", {"GH_TOKEN": "fake"})
+        dep_map, skipped, _all_repos = _collect_fleet_pins(
+            "test-org", {"GH_TOKEN": "fake"}
+        )
 
         assert len(fetch_order) == 2
         key = "https://github.com/org/dep.git"
@@ -705,6 +725,204 @@ class TestCollectFleetPins:
         assert len(dep_map[key]) == 2
         assert ("repo1", "alpha", sha_a) in dep_map[key]
         assert ("repo2", "beta", sha_b) in dep_map[key]
+
+
+# ---------------------------------------------------------------------------
+# _normalize_git_url
+# ---------------------------------------------------------------------------
+
+
+class TestNormalizeGitUrl:
+    """Tests for _normalize_git_url."""
+
+    def test_ssh_url(self) -> None:
+        assert (
+            _normalize_git_url("git@github.com:org/repo.git")
+            == "https://github.com/org/repo"
+        )
+
+    def test_https_with_git_suffix(self) -> None:
+        assert (
+            _normalize_git_url("https://github.com/org/repo.git")
+            == "https://github.com/org/repo"
+        )
+
+    def test_https_without_git_suffix(self) -> None:
+        assert (
+            _normalize_git_url("https://github.com/org/repo")
+            == "https://github.com/org/repo"
+        )
+
+    def test_trailing_slash(self) -> None:
+        assert (
+            _normalize_git_url("https://github.com/org/repo/")
+            == "https://github.com/org/repo"
+        )
+
+    def test_ssh_without_git_suffix(self) -> None:
+        assert (
+            _normalize_git_url("git@github.com:org/repo")
+            == "https://github.com/org/repo"
+        )
+
+
+# ---------------------------------------------------------------------------
+# _build_first_party_graph
+# ---------------------------------------------------------------------------
+
+
+class TestBuildFirstPartyGraph:
+    """Tests for _build_first_party_graph."""
+
+    def test_no_fleet_deps(self) -> None:
+        """When no pins match fleet repos, graph is empty."""
+        dep_map = {"https://github.com/external/dep.git": [("repo1", "pkg1", "a" * 40)]}
+        graph = _build_first_party_graph(dep_map, ["repo1"], "org")
+        assert graph == {}
+
+    def test_fleet_dep(self) -> None:
+        """When a repo pins a fleet repo, an edge is created."""
+        dep_map = {
+            "https://github.com/org/dep-repo.git": [("repo1", "dep-repo", "a" * 40)]
+        }
+        graph = _build_first_party_graph(dep_map, ["repo1", "dep-repo"], "org")
+        assert graph == {"repo1": {"dep-repo"}}
+
+    def test_self_loop_excluded(self) -> None:
+        """A repo pinning itself is excluded."""
+        dep_map = {"https://github.com/org/repo1.git": [("repo1", "repo1", "a" * 40)]}
+        graph = _build_first_party_graph(dep_map, ["repo1"], "org")
+        assert graph == {}
+
+    def test_ssh_url_matches_https_fleet_repo(self) -> None:
+        """SSH-format pin URL matches an HTTPS fleet repo."""
+        dep_map = {"git@github.com:org/dep-repo.git": [("repo1", "dep-repo", "a" * 40)]}
+        graph = _build_first_party_graph(dep_map, ["repo1", "dep-repo"], "org")
+        assert graph == {"repo1": {"dep-repo"}}
+
+    def test_multiple_deps(self) -> None:
+        """A repo with multiple fleet deps has multiple edges."""
+        dep_map = {
+            "https://github.com/org/dep-a.git": [("repo1", "dep-a", "a" * 40)],
+            "https://github.com/org/dep-b.git": [("repo1", "dep-b", "b" * 40)],
+        }
+        graph = _build_first_party_graph(dep_map, ["repo1", "dep-a", "dep-b"], "org")
+        assert graph == {"repo1": {"dep-a", "dep-b"}}
+
+
+# ---------------------------------------------------------------------------
+# _topological_sort
+# ---------------------------------------------------------------------------
+
+
+class TestTopologicalSort:
+    """Tests for _topological_sort."""
+
+    def test_no_dependencies(self) -> None:
+        """Repos with no deps are all leaves."""
+        graph: dict[str, set[str]] = {}
+        repos = {"a", "b", "c"}
+        sorted_repos, cycle_repos = _topological_sort(graph, repos)
+        assert cycle_repos == set()
+        assert set(sorted_repos) == repos
+
+    def test_linear_chain(self) -> None:
+        """A → B → C: C first, then B, then A."""
+        graph = {"a": {"b"}, "b": {"c"}}
+        sorted_repos, cycle_repos = _topological_sort(graph, {"a", "b", "c"})
+        assert cycle_repos == set()
+        assert sorted_repos.index("c") < sorted_repos.index("b")
+        assert sorted_repos.index("b") < sorted_repos.index("a")
+
+    def test_diamond(self) -> None:
+        """A depends on B and C; B depends on C. C first."""
+        graph = {"a": {"b", "c"}, "b": {"c"}}
+        sorted_repos, cycle_repos = _topological_sort(graph, {"a", "b", "c"})
+        assert cycle_repos == set()
+        assert sorted_repos.index("c") < sorted_repos.index("b")
+        assert sorted_repos.index("c") < sorted_repos.index("a")
+
+    def test_cycle_detected(self) -> None:
+        """A ↔ B cycle: both are in cycle_repos."""
+        graph = {"a": {"b"}, "b": {"a"}}
+        sorted_repos, cycle_repos = _topological_sort(graph, {"a", "b"})
+        assert cycle_repos == {"a", "b"}
+        assert sorted_repos == []
+
+    def test_partial_cycle(self) -> None:
+        """A → B ↔ C: A depends on B which is in a cycle, so all three
+        are unsortable."""
+        graph = {"a": {"b"}, "b": {"c"}, "c": {"b"}}
+        sorted_repos, cycle_repos = _topological_sort(graph, {"a", "b", "c"})
+        assert cycle_repos == {"a", "b", "c"}
+        assert sorted_repos == []
+
+    def test_deterministic_order(self) -> None:
+        """Same input always produces the same output."""
+        graph = {"a": {"c"}, "b": {"c"}}
+        repos = {"a", "b", "c"}
+        result1 = _topological_sort(graph, repos)
+        result2 = _topological_sort(graph, repos)
+        assert result1 == result2
+
+    def test_dep_outside_set_ignored(self) -> None:
+        """Dependencies not in the repos set are ignored."""
+        graph = {"a": {"b", "external"}}
+        sorted_repos, cycle_repos = _topological_sort(graph, {"a", "b"})
+        assert cycle_repos == set()
+        # b has no in-set deps, so it's a leaf
+        assert sorted_repos.index("b") < sorted_repos.index("a")
+
+
+# ---------------------------------------------------------------------------
+# _get_fleet_dep_bumps
+# ---------------------------------------------------------------------------
+
+
+class TestGetFleetDepBumps:
+    """Tests for _get_fleet_dep_bumps."""
+
+    def test_no_pushed_deps(self) -> None:
+        """When no fleet deps were pushed, no bumps returned."""
+        bumps = _get_fleet_dep_bumps("repo1", {"dep-repo"}, {}, {}, "org")
+        assert bumps == []
+
+    def test_pushed_dep_creates_bump(self) -> None:
+        """When a fleet dep was pushed, its pin is bumped."""
+        dep_map = {
+            "https://github.com/org/dep-repo.git": [("repo1", "dep-repo", "a" * 40)]
+        }
+        pushed_shas = {"dep-repo": "b" * 40}
+        bumps = _get_fleet_dep_bumps("repo1", {"dep-repo"}, pushed_shas, dep_map, "org")
+        assert bumps == [("dep-repo", "b" * 40)]
+
+    def test_already_current_rev_skipped(self) -> None:
+        """When the current rev matches the pushed SHA, no bump."""
+        sha = "a" * 40
+        dep_map = {"https://github.com/org/dep-repo.git": [("repo1", "dep-repo", sha)]}
+        pushed_shas = {"dep-repo": sha}
+        bumps = _get_fleet_dep_bumps("repo1", {"dep-repo"}, pushed_shas, dep_map, "org")
+        assert bumps == []
+
+    def test_only_matching_repo(self) -> None:
+        """Only bumps for the specified repo, not other repos."""
+        dep_map = {
+            "https://github.com/org/dep-repo.git": [
+                ("repo1", "dep-repo", "a" * 40),
+                ("repo2", "dep-repo", "c" * 40),
+            ]
+        }
+        pushed_shas = {"dep-repo": "b" * 40}
+        bumps = _get_fleet_dep_bumps("repo1", {"dep-repo"}, pushed_shas, dep_map, "org")
+        assert bumps == [("dep-repo", "b" * 40)]
+
+    def test_dep_not_in_pushed_shas(self) -> None:
+        """Fleet dep not in pushed_shas produces no bump."""
+        dep_map = {
+            "https://github.com/org/dep-repo.git": [("repo1", "dep-repo", "a" * 40)]
+        }
+        bumps = _get_fleet_dep_bumps("repo1", {"dep-repo"}, {}, dep_map, "org")
+        assert bumps == []
 
 
 # ---------------------------------------------------------------------------
@@ -725,9 +943,7 @@ class TestApplyPinBump:
         subprocess_calls: list[tuple[str, ...]] = []
         gh_calls: list[tuple[str, ...]] = []
 
-        def fake_run(
-            *args: str, **kwargs: object
-        ) -> subprocess.CompletedProcess[str]:
+        def fake_run(*args: str, **kwargs: object) -> subprocess.CompletedProcess[str]:
             subprocess_calls.append(args)
             if args[0] == "git" and args[1] == "clone":
                 # Create the fake cloned repo directory
@@ -802,9 +1018,7 @@ class TestApplyPinBump:
     ) -> None:
         """When pyproject.toml is missing from the cloned repo, skip quietly."""
 
-        def fake_run(
-            *args: str, **kwargs: object
-        ) -> subprocess.CompletedProcess[str]:
+        def fake_run(*args: str, **kwargs: object) -> subprocess.CompletedProcess[str]:
             if args[0] == "git" and args[1] == "clone":
                 dest = Path(args[-1])
                 dest.mkdir(parents=True, exist_ok=True)
@@ -862,9 +1076,7 @@ class TestSweep:
         exit_code = sweep("test-org", "SWEEP_TOKEN")
         assert exit_code == 0
 
-    def test_all_pins_current_returns_zero(
-        self, tmp_path: Path, monkeypatch
-    ) -> None:
+    def test_all_pins_current_returns_zero(self, tmp_path: Path, monkeypatch) -> None:
         """When all fleet pins are already current, sweep returns 0."""
         # Create a bare repo to resolve a real SHA
         dep_bare, head = _create_bare_repo(tmp_path)
@@ -899,9 +1111,7 @@ class TestSweep:
         exit_code = sweep("test-org", "SWEEP_TOKEN")
         assert exit_code == 0
 
-    def test_stale_pins_trigger_bumps(
-        self, tmp_path: Path, monkeypatch
-    ) -> None:
+    def test_stale_pins_trigger_bumps(self, tmp_path: Path, monkeypatch) -> None:
         """When pins are stale, sweep detects bumps and processes repos."""
         # Create a bare repo and get its HEAD
         dep_bare, head = _create_bare_repo(tmp_path)
@@ -952,9 +1162,7 @@ class TestSweep:
         assert exit_code == 0
 
         # Verify clone happened (meaning a bump was detected)
-        clone_calls = [
-            c for c in subprocess_calls if c[0] == "git" and c[1] == "clone"
-        ]
+        clone_calls = [c for c in subprocess_calls if c[0] == "git" and c[1] == "clone"]
         assert len(clone_calls) == 1
 
         # Verify PR was created
@@ -964,3 +1172,166 @@ class TestSweep:
             if c[0] == "gh" and c[1] == "pr" and "create" in c
         ]
         assert len(pr_create) == 1
+
+    def test_topological_ordering(self, tmp_path: Path, monkeypatch) -> None:
+        """Leaf repo is bumped before its dependent; dependent pins the
+        leaf's PR-branch SHA for coherent transitive resolution."""
+        dep_bare, head = _create_bare_repo(tmp_path)
+        stale = "0" * 40
+
+        # Fleet: board (leaf — pins modules), mail (pins board + modules)
+        dep_map = {
+            f"file://{dep_bare}": [
+                ("board", "modules", stale),
+                ("mail", "modules", stale),
+            ],
+            "https://github.com/test-org/board.git": [
+                ("mail", "board", stale),
+            ],
+        }
+        all_fleet_repos = ["board", "mail"]
+
+        monkeypatch.setattr(
+            _pin_bump,
+            "_collect_fleet_pins",
+            lambda *a, **kw: (dep_map, [], all_fleet_repos),
+        )
+        monkeypatch.setattr(
+            _pin_bump,
+            "_resolve_latest_shas",
+            lambda dm: ({f"file://{dep_bare}": head}, []),
+        )
+
+        call_order: list[str] = []
+        bumps_per_repo: dict[str, list[tuple[str, str]]] = {}
+
+        def fake_apply(
+            owner: str,
+            repo: str,
+            bumps: list[tuple[str, str]],
+            token: str,
+            tmpdir: str,
+        ) -> str:
+            call_order.append(repo)
+            bumps_per_repo[repo] = bumps
+            return f"{repo}_pr_sha"
+
+        monkeypatch.setattr(_pin_bump, "_apply_pin_bump", fake_apply)
+        monkeypatch.setenv("SWEEP_TOKEN", "fake-token")
+
+        exit_code = sweep("test-org", "SWEEP_TOKEN")
+        assert exit_code == 0
+
+        # board (leaf) processed before mail (dependent)
+        assert call_order == ["board", "mail"]
+
+        # mail's bumps: modules → HEAD, board → board's PR-branch SHA
+        mail_bumps = dict(bumps_per_repo["mail"])
+        assert mail_bumps["modules"] == head
+        assert mail_bumps["board"] == "board_pr_sha"
+
+    def test_cycle_repos_skipped(self, monkeypatch) -> None:
+        """Repos in a first-party dependency cycle are skipped."""
+        stale = "0" * 40
+        new = "f" * 40
+
+        dep_map = {
+            "https://github.com/test-org/b.git": [("a", "b", stale)],
+            "https://github.com/test-org/a.git": [("b", "a", stale)],
+        }
+        all_fleet_repos = ["a", "b"]
+
+        monkeypatch.setattr(
+            _pin_bump,
+            "_collect_fleet_pins",
+            lambda *a, **kw: (dep_map, [], all_fleet_repos),
+        )
+        monkeypatch.setattr(
+            _pin_bump,
+            "_resolve_latest_shas",
+            lambda dm: (
+                {
+                    "https://github.com/test-org/b.git": new,
+                    "https://github.com/test-org/a.git": new,
+                },
+                [],
+            ),
+        )
+
+        apply_calls: list[str] = []
+
+        def fake_apply(
+            owner: str,
+            repo: str,
+            bumps: list[tuple[str, str]],
+            token: str,
+            tmpdir: str,
+        ) -> str:
+            apply_calls.append(repo)
+            return "sha"
+
+        monkeypatch.setattr(_pin_bump, "_apply_pin_bump", fake_apply)
+        monkeypatch.setenv("SWEEP_TOKEN", "fake-token")
+
+        exit_code = sweep("test-org", "SWEEP_TOKEN")
+        assert exit_code == 0
+
+        # Neither repo was processed (both in cycle)
+        assert apply_calls == []
+
+    def test_cascading_skip_on_dep_failure(self, monkeypatch) -> None:
+        """When a leaf repo fails, its dependents are skipped."""
+        stale = "0" * 40
+        new = "f" * 40
+
+        dep_map = {
+            "https://github.com/test-org/dep.git": [
+                ("leaf", "dep", stale),
+                ("consumer", "dep", stale),
+            ],
+            "https://github.com/test-org/leaf.git": [
+                ("consumer", "leaf", stale),
+            ],
+        }
+        all_fleet_repos = ["leaf", "consumer"]
+
+        monkeypatch.setattr(
+            _pin_bump,
+            "_collect_fleet_pins",
+            lambda *a, **kw: (dep_map, [], all_fleet_repos),
+        )
+        monkeypatch.setattr(
+            _pin_bump,
+            "_resolve_latest_shas",
+            lambda dm: (
+                {
+                    "https://github.com/test-org/dep.git": new,
+                    "https://github.com/test-org/leaf.git": new,
+                },
+                [],
+            ),
+        )
+
+        apply_calls: list[str] = []
+
+        def fake_apply(
+            owner: str,
+            repo: str,
+            bumps: list[tuple[str, str]],
+            token: str,
+            tmpdir: str,
+        ) -> str:
+            apply_calls.append(repo)
+            if repo == "leaf":
+                raise RuntimeError("lock failed")
+            return "sha"
+
+        monkeypatch.setattr(_pin_bump, "_apply_pin_bump", fake_apply)
+        monkeypatch.setenv("SWEEP_TOKEN", "fake-token")
+
+        exit_code = sweep("test-org", "SWEEP_TOKEN")
+        assert exit_code == 1  # failed
+
+        # leaf was attempted but failed; consumer was skipped
+        assert "leaf" in apply_calls
+        assert "consumer" not in apply_calls
