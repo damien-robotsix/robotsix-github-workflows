@@ -550,15 +550,16 @@ class TestResolveLatestShas:
             ],
             "https://example.com/b.git": [("repo3", "beta", "2" * 40)],
         }
-        result = _resolve_latest_shas(dep_map)
+        latest_map, unresolved = _resolve_latest_shas(dep_map)
 
         assert len(calls) == 2
         assert "https://example.com/a.git" in calls
         assert "https://example.com/b.git" in calls
-        assert result == {
+        assert latest_map == {
             "https://example.com/a.git": sha_a,
             "https://example.com/b.git": sha_b,
         }
+        assert unresolved == []
 
 
 # ---------------------------------------------------------------------------
@@ -580,8 +581,8 @@ class TestCollectFleetPins:
             return subprocess.run(args, text=True, check=True, **kwargs)  # type: ignore[call-overload,no-any-return]
 
         monkeypatch.setattr(_pin_bump, "run", fake_run)
-        result = _collect_fleet_pins("test-org", {"GH_TOKEN": "fake"})
-        assert result == {}
+        dep_map, skipped = _collect_fleet_pins("test-org", {"GH_TOKEN": "fake"})
+        assert dep_map == {}
 
     def test_repo_without_pyproject(self, monkeypatch) -> None:
         """Repos without pyproject.toml are silently skipped."""
@@ -601,8 +602,8 @@ class TestCollectFleetPins:
 
         monkeypatch.setattr(_pin_bump, "run", fake_run)
         monkeypatch.setattr(_pin_bump, "gh", fake_gh)
-        result = _collect_fleet_pins("test-org", {"GH_TOKEN": "fake"})
-        assert result == {}
+        dep_map, skipped = _collect_fleet_pins("test-org", {"GH_TOKEN": "fake"})
+        assert dep_map == {}
 
     def test_repo_with_git_pins(self, monkeypatch) -> None:
         """Git-sourced pins with 40-char revs are collected."""
@@ -628,11 +629,11 @@ class TestCollectFleetPins:
 
         monkeypatch.setattr(_pin_bump, "run", fake_run)
         monkeypatch.setattr(_pin_bump, "gh", fake_gh)
-        result = _collect_fleet_pins("test-org", {"GH_TOKEN": "fake"})
+        dep_map, skipped = _collect_fleet_pins("test-org", {"GH_TOKEN": "fake"})
 
         expected_key = "https://github.com/org/dep.git"
-        assert expected_key in result
-        assert result[expected_key] == [("myrepo", "mypkg", sha)]
+        assert expected_key in dep_map
+        assert dep_map[expected_key] == [("myrepo", "mypkg", sha)]
 
     def test_short_rev_skipped(self, monkeypatch) -> None:
         """Sources with a non-40-char rev (tag/branch) are skipped."""
@@ -657,8 +658,8 @@ class TestCollectFleetPins:
 
         monkeypatch.setattr(_pin_bump, "run", fake_run)
         monkeypatch.setattr(_pin_bump, "gh", fake_gh)
-        result = _collect_fleet_pins("test-org", {"GH_TOKEN": "fake"})
-        assert result == {}
+        dep_map, skipped = _collect_fleet_pins("test-org", {"GH_TOKEN": "fake"})
+        assert dep_map == {}
 
     def test_multiple_repos(self, monkeypatch) -> None:
         """Multiple repos are all enumerated."""
@@ -695,15 +696,15 @@ class TestCollectFleetPins:
 
         monkeypatch.setattr(_pin_bump, "run", fake_run)
         monkeypatch.setattr(_pin_bump, "gh", fake_gh)
-        result = _collect_fleet_pins("test-org", {"GH_TOKEN": "fake"})
+        dep_map, skipped = _collect_fleet_pins("test-org", {"GH_TOKEN": "fake"})
 
         assert len(fetch_order) == 2
         key = "https://github.com/org/dep.git"
-        assert key in result
+        assert key in dep_map
         # Two pins collected across two repos
-        assert len(result[key]) == 2
-        assert ("repo1", "alpha", sha_a) in result[key]
-        assert ("repo2", "beta", sha_b) in result[key]
+        assert len(dep_map[key]) == 2
+        assert ("repo1", "alpha", sha_a) in dep_map[key]
+        assert ("repo2", "beta", sha_b) in dep_map[key]
 
 
 # ---------------------------------------------------------------------------
