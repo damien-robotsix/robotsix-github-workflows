@@ -13,6 +13,13 @@ concurrency:
 
 jobs:
   release:
+    # A caller's job-level permissions must cover what the reusable workflow's
+    # jobs request; with only the top-level `contents: read` the run died as a
+    # startup_failure (no logs) on 2026-08-30 12:12Z, right after the towncrier
+    # step was removed. Same grants as every other repo's release-please caller.
+    permissions:
+      contents: write       # release commit, tag, GitHub Release
+      pull-requests: write  # open/update the release PR
     uses: ./.github/workflows/release-please.yml
     with:
       app-id: ${{ vars.RELEASE_APP_ID }}
