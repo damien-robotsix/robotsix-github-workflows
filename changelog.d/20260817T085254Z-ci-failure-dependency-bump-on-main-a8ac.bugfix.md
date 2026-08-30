@@ -1,1 +1,0 @@
-Inline the `bump-setup` and `bump-commit-pr` composite-action steps into `bump.yml` (the shared reusable workflow behind `deps-bump.yml` and `pin-bump.yml`). GitHub resolves relative `./` composite-action paths against the caller's checkout, so cross-repo callers failed with "Can't find 'action.yml'" — inlining fixes the bump workflows for callers.

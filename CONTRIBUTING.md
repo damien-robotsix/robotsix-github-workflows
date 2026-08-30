@@ -77,4 +77,12 @@ fleet. All PRs must pass:
 - Fleet CI expectations as defined in the
   [standards](https://github.com/damien-robotsix/robotsix-standards)
 
+### Conventional commits
+
+Commit subjects and PR titles must follow the
+[Conventional Commits](https://www.conventionalcommits.org/) format
+(`feat:`/`fix:`/`chore:`/`docs:`/`refactor:`/`test:`/`ci:`).
+[release-please](https://github.com/googleapis/release-please) generates
+`CHANGELOG.md` from these messages — do **not** add changelog fragments.
+
 See the companion `AGENT.md` for repo-specific rules for all contributors.

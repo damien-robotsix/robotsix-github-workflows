@@ -1,1 +1,0 @@
-Pin-bump sweep now processes repos in topological order so that dependents always pin a commit whose own first-party pins already match, preventing conflicting URL errors when first-party repos pin each other. Repos involved in dependency cycles are skipped with an explicit message.

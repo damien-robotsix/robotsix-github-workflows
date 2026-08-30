@@ -1,1 +1,0 @@
-Add Makefile with `test`, `pytest`, `shell-tests`, `lint`, and `help` targets, CONTRIBUTING.md with developer documentation, and a "Development" section in README.md linking to the contributing guide.

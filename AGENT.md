@@ -57,3 +57,12 @@ Two composite actions now exist in this repo (`python-setup`,
 actions must follow the same conventions: a single `action.yml` at the root
 of the directory, commit-SHA-pinned `uses:` lines (Rule 1 applies), and
 `persist-credentials: false` on any `actions/checkout` step (Rule 3 applies).
+
+### Conventional commits and release-please
+
+Commit subjects and PR titles must follow the
+[Conventional Commits](https://www.conventionalcommits.org/) format
+(`feat:`/`fix:`/`chore:`/`docs:`/`refactor:`/`test:`/`ci:`).
+[release-please](https://github.com/googleapis/release-please) generates
+`CHANGELOG.md` from these commit messages — do **not** add changelog
+fragments or use towncrier.

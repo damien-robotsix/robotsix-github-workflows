@@ -1,1 +1,0 @@
-Consolidated duplicated app-auth contract from `deps-bump.yml` and `pin-bump.yml` into a shared `.github/workflows/bump.yml` with a `bump-mode` input. Both original workflows remain as thin wrappers delegating to the consolidated workflow, preserving caller-facing entry points.

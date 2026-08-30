@@ -1,1 +1,0 @@
-Fix `bump.yml` to inline token-minting and commit+PR steps instead of referencing deleted composite actions `bump-setup` and `bump-commit-pr`. Add behavioral notes to `python-docs.yml`, `python-security.yml`, and `scan-container.yml` documentation sections.

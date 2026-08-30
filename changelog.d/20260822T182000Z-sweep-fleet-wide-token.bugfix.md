@@ -1,1 +1,0 @@
-`pin-bump-sweep.yml` now passes `owner` to `create-github-app-token`, which is what makes the minted token installation-wide. Omitting `repositories` alone scopes the token to the calling repository, so every cross-repo push failed with `Permission to <repo> denied to <app>[bot]` — the sweep enumerated the fleet correctly and then 403'd on the first bump.

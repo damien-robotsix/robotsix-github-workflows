@@ -1,1 +1,0 @@
-pin-bump sweep: wrap each repo's `_apply_pin_bump` in try/except so a single failing repo (e.g. unresolvable `uv lock`) no longer aborts the entire fleet-wide sweep; print a summary of bumped, already-current, and failed repos at the end, and exit non-zero when any repo failed.

@@ -26,10 +26,6 @@ this repository.
 | `python-version` | string | `3.14` | Python version for the modules-drift job. |
 | `uv-version` | string | `0.8.15` | uv version for the modules-drift job. |
 
-## `changelog-check.yml`
-
-No inputs.  No secrets.
-
 ## `codeql.yml`
 
 | Input | Type | Default | Description |
