@@ -166,42 +166,15 @@ jobs:
           [ "$FAIL" -eq 0 ] || exit 1
 
       # Changelog management. release-please is the fleet standard
-      # (robotsix-standards release-please.md); towncrier is superseded but
-      # still in use by repos that have not migrated, so both are accepted.
-      #
-      # A repo carrying release-please-config.json is on release-please, which
-      # generates the changelog from conventional commits and has no fragment
-      # directory at all — requiring changelog.d/ there would make migrating
-      # off towncrier impossible, since this gate would fail the very commit
-      # that removes it.
+      # (robotsix-standards release-please.md); it generates the changelog
+      # from conventional commits — no fragment directory needed.
       - name: Check changelog management
         run: |
-          if [ ! -f pyproject.toml ]; then
-            echo "pyproject.toml not found — skipping changelog check"
-            exit 0
+          if [ ! -f release-please-config.json ]; then
+            echo "::error::release-please-config.json is missing — add release-please config for changelog generation"
+            exit 1
           fi
-
-          if [ -f release-please-config.json ]; then
-            echo "release-please-config.json found — changelog is generated from"
-            echo "conventional commits; towncrier layout not required."
-            exit 0
-          fi
-
-          FAIL=0
-
-          if [ ! -d changelog.d ]; then
-            echo "::error::changelog.d/ directory is missing — towncrier needs a fragment directory"
-            FAIL=1
-          fi
-
-          # [tool.towncrier] is the standard TOML section header for
-          # towncrier configuration in pyproject.toml.
-          if ! grep -q '^\[tool\.towncrier\]' pyproject.toml; then
-            echo "::error::pyproject.toml is missing [tool.towncrier] section"
-            FAIL=1
-          fi
-
-          [ "$FAIL" -eq 0 ] || exit 1
+          echo "release-please-config.json found — changelog is generated from conventional commits."
 
   # Modules-drift gate: validates docs/modules.yaml registration and path
   # consistency.  Only runs when the caller opts in with has-board: true,

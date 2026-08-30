@@ -14,14 +14,13 @@ jobs:
 | `python-ci.yml` | lint/format/type/test gate for Python packages |
 | `python-security.yml` | bandit / pip-audit / trufflehog security scan |
 | `python-docs.yml` | mkdocs build/deploy |
-| `auto-release.yml` | scheduled towncrier-driven `0.x` tag-cutting release workflow |
+| `auto-release.yml` | scheduled towncrier-driven `0.x` tag-cutting release workflow (deprecated — use `release-please.yml`) |
 | `docker-release.yml` | build + push container image |
 | `docker-pr-scan.yml` | build (no push) + Trivy CRITICAL/HIGH scan for PRs |
 | `scan-container.yml` | weekly Trivy rescan of published :main image (SARIF, report-only) |
 | `deps-bump.yml` | scheduled `uv lock --upgrade` PR |
 | `dependabot-auto-merge.yml` | auto-merge Dependabot PRs (protected & unprotected branch handling) |
 | `baseline-check.yml` | enforce AGENT.md and .github/dependabot.yml baseline rules |
-| `changelog-check.yml` | towncrier fragment gate for pull requests (skip-changelog label exempt) |
 | `codeql.yml` | CodeQL static analysis |
 | `config-ownership-check.yml` | PR gate: prevents deploy-plane config from leaking component-internal settings |
 | `lint-workflows.yml` | actionlint + zizmor audit of workflow files, SARIF-upload-permission validation, and trigger-coverage validation |
@@ -70,41 +69,15 @@ release commit reachable.
 
 **Consumer prerequisites:**
 
-- A `[tool.towncrier]` config in `pyproject.toml` with `directory = "changelog.d"`
-  and the four fragment types `breaking`, `feature`, `bugfix`, `misc`:
-
-  ```toml
-  [tool.towncrier]
-  directory = "changelog.d"
-  package = "your_package"
-
-  [[tool.towncrier.type]]
-  directory = "breaking"
-  name = "Breaking Changes"
-  showcontent = true
-
-  [[tool.towncrier.type]]
-  directory = "feature"
-  name = "Features"
-  showcontent = true
-
-  [[tool.towncrier.type]]
-  directory = "bugfix"
-  name = "Bug Fixes"
-  showcontent = true
-
-  [[tool.towncrier.type]]
-  directory = "misc"
-  name = "Miscellaneous"
-  showcontent = true
-  ```
-
 - A `[project] version` on the `0.x` line (e.g. `version = "0.1.0"`).
   The workflow only handles the pre-1.0 release cadence — a non-`0.x`
   version causes a hard failure.
 
 - An existing `docker-release.yml` caller workflow that maps `v*` tags
   to `X.Y.Z` image tags via `type=semver,pattern={{version}}`.
+
+> **Note:** This workflow is deprecated in favour of `release-please.yml`,
+> which uses conventional commits instead of towncrier fragments.
 
 ## `docker-pr-scan.yml` — caller template
 
@@ -332,32 +305,7 @@ jobs:
 - `README.md` at the repo root with a `damien-robotsix/robotsix-standards` reference.
 - `LICENSE` at the repo root using the MIT license.
 - `.github/dependabot.yml` covering at minimum `uv`, `github-actions`, and `pre-commit` ecosystems (plus `docker` when `has-docker: true` or a root `Dockerfile` exists, plus `npm` when `package.json` exists).
-- `changelog.d/` fragment directory and `[tool.towncrier]` section in `pyproject.toml` (only when `pyproject.toml` exists — skipped for non-Python repos).
-
-## `changelog-check.yml` — caller template
-
-Consumer repos add a wrapper workflow (e.g. `.github/workflows/changelog-check.yml`)
-that triggers on pull requests:
-
-```yaml
-name: Changelog Check
-
-on:
-  pull_request:
-
-jobs:
-  changelog:
-    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/changelog-check.yml@<sha>
-```
-
-The job is skipped when the pull request carries the `skip-changelog` label (e.g. for
-CI-only or chore PRs that don't need a changelog fragment).
-
-**Consumer prerequisites:**
-
-- A `[tool.towncrier]` config in `pyproject.toml` with a `changelog.d/` fragment directory.
-- The `skip-changelog` label must exist in the repository (the workflow skips on its
-  presence; missing labels are silently ignored).
+- `release-please-config.json` at the repo root.
 
 ## `config-ownership-check.yml` — caller template
 

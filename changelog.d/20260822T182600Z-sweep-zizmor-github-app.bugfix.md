@@ -1,1 +1,0 @@
-Suppress zizmor's `github-app` finding on `pin-bump-sweep.yml`'s token step, with the reason inline: the sweep discovers the fleet at run time, so there is no fixed `repositories:` list to scope the token to. The lint failure had been merged red.

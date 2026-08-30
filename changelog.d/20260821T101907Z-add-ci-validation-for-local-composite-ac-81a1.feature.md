@@ -1,1 +1,0 @@
-Add a CI job that validates local composite action references (`uses: ./.github/actions/<name>`) resolve to an existing `action.yml`/`action.yaml`, with optional orphan detection, closing the gap left by actionlint and action-validator.
