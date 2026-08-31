@@ -9,15 +9,15 @@ permissions:
 jobs:
   baseline:
     name: Baseline Check
-    uses: ./.github/workflows/baseline-check.yml
+    uses: $/.github/workflows/baseline-check.yml
 
   config-ownership:
     name: Config Ownership Check
-    uses: ./.github/workflows/config-ownership-check.yml
+    uses: $/.github/workflows/config-ownership-check.yml
 
   lint:
     name: Lint Workflows
-    uses: ./.github/workflows/lint-workflows.yml
+    uses: $/.github/workflows/lint-workflows.yml
     with:
       run-actionlint: true
       run-zizmor: true
