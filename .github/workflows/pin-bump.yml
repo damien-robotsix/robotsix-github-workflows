@@ -22,7 +22,7 @@ on:
         description: uv version to install.
         required: false
         type: string
-        default: "0.8.15"
+        default: "0.12.5"
       default-branch:
         description: Base branch for the PR and git push target.
         required: false
