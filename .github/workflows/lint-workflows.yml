@@ -73,5 +73,10 @@ jobs:
           python-version: "3.14"
       - name: Run zizmor
         run: |
-          python3 -m pip install --quiet zizmor
+          # Pinned below the release that added the self-repository audit:
+          # an unpinned zizmor + pedantic persona makes every new upstream
+          # audit an instant fleet-wide CI failure on untouched files.
+          # Adopting the new $/ self-repository syntax (and unpinning
+          # deliberately) is tracked as its own ticket.
+          python3 -m pip install --quiet 'zizmor<1.30'
           zizmor --persona=pedantic .github/workflows/
