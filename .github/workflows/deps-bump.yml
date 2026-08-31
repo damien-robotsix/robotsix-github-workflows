@@ -70,7 +70,7 @@ jobs:
   bump:
     name: Bump
     permissions: {}
-    uses: ./.github/workflows/bump.yml
+    uses: $/.github/workflows/bump.yml
     with:
       bump-mode: deps
       packages: ${{ inputs.packages }}
