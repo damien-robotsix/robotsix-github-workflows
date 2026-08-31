@@ -1,3 +1,43 @@
+# Changelog
+
+## 1.0.0 (2026-08-31)
+
+
+### Features
+
+* Add CI validation for local composite action references in .github/workflows (20260821T101907Z-add-ci-validation-for-local-composite-ac-81a1) ([#100](https://github.com/damien-robotsix/robotsix-github-workflows/issues/100)) ([005743e](https://github.com/damien-robotsix/robotsix-github-workflows/commit/005743e6b88ff27fc4dec2c5c879e359ce27b624))
+* copy-paste: 2-file clone in bump workflows — extract shared app-auth input contract (20260817T102904Z-copy-paste-2-file-clone-in-bump-workflow-820c) ([#99](https://github.com/damien-robotsix/robotsix-github-workflows/issues/99)) ([f343f5c](https://github.com/damien-robotsix/robotsix-github-workflows/commit/f343f5ca84b1d54bb4c2fdcb83568724aa9f743c))
+* Promote mutmut mutation-test to a reusable workflow (20260817T220114Z-promote-mutmut-mutation-test-to-a-reusab-a89f) ([#98](https://github.com/damien-robotsix/robotsix-github-workflows/issues/98)) ([9134bd5](https://github.com/damien-robotsix/robotsix-github-workflows/commit/9134bd5595af397c4571fbfb659a741e7adec3a7))
+* **release:** promote release-please to a reusable workflow ([#95](https://github.com/damien-robotsix/robotsix-github-workflows/issues/95)) ([b2c5f36](https://github.com/damien-robotsix/robotsix-github-workflows/commit/b2c5f36c25e318d81f89a2a0b24ae92872ba4606))
+* robotsix-github-workflows: Enable triage_boilerplate periodic workflow (20260809T090254Z-robotsix-github-workflows-enable-triage-2e94) ([#84](https://github.com/damien-robotsix/robotsix-github-workflows/issues/84)) ([454851c](https://github.com/damien-robotsix/robotsix-github-workflows/commit/454851ccfdba26ba4d08f3effea09258dfc3fe2f))
+
+
+### Bug Fixes
+
+* Add self-test caller workflow for reusable workflow contract validation (20260821T131240Z-add-self-test-caller-workflow-for-reusab-8a5c) ([#112](https://github.com/damien-robotsix/robotsix-github-workflows/issues/112)) ([af32c21](https://github.com/damien-robotsix/robotsix-github-workflows/commit/af32c21418a02796b619eb22ce9b8aee79dc82c5))
+* **auto-merge:** fall back to a direct merge when auto-merge is unavailable ([#73](https://github.com/damien-robotsix/robotsix-github-workflows/issues/73)) ([e33f19f](https://github.com/damien-robotsix/robotsix-github-workflows/commit/e33f19f0657947c239ffcbaf3b47f149571e2bc1))
+* **auto-merge:** stop a missing Skip-Changelog label blocking every merge ([#72](https://github.com/damien-robotsix/robotsix-github-workflows/issues/72)) ([e7ad86b](https://github.com/damien-robotsix/robotsix-github-workflows/commit/e7ad86bbc792a9abbfd2cc770255d295282a34f3))
+* **baseline:** accept release-please repos, not just towncrier ([#70](https://github.com/damien-robotsix/robotsix-github-workflows/issues/70)) ([a6378ac](https://github.com/damien-robotsix/robotsix-github-workflows/commit/a6378accaf26c75b12fac324c3056255647c107b))
+* **ci:** grant the release caller job the write permissions the reusable workflow needs ([#134](https://github.com/damien-robotsix/robotsix-github-workflows/issues/134)) ([94d7adb](https://github.com/damien-robotsix/robotsix-github-workflows/commit/94d7adb43db9ddd7222ad25834231ac41314359b))
+* completeness_check scan: 2 findings (2026-08-21) (20260821T104018Z-completeness-check-scan-2-findings-2026-5aea) ([#101](https://github.com/damien-robotsix/robotsix-github-workflows/issues/101)) ([34e5362](https://github.com/damien-robotsix/robotsix-github-workflows/commit/34e53629ee72af5abda012115d62a3b2bff6e058))
+* Fix local-action resolution in python-ci.yml reusable workflow (20260823T161654Z-fix-local-action-resolution-in-python-ci-349a) ([#122](https://github.com/damien-robotsix/robotsix-github-workflows/issues/122)) ([35150af](https://github.com/damien-robotsix/robotsix-github-workflows/commit/35150afd6879d382fd349c1b74af556f4f1b0214))
+* Fix relative composite-action paths in reusable workflows (20260817T085254Z-ci-failure-dependency-bump-on-main-a8ac) ([#97](https://github.com/damien-robotsix/robotsix-github-workflows/issues/97)) ([f3a25a8](https://github.com/damien-robotsix/robotsix-github-workflows/commit/f3a25a871b70cd0cbe47371ceb65ab69f62c46a2))
+* pin-bump sweep aborts the whole fleet when one repo fails to lock (20260822T183320Z-pin-bump-sweep-aborts-the-whole-fleet-wh-38e6) ([#119](https://github.com/damien-robotsix/robotsix-github-workflows/issues/119)) ([3ee051d](https://github.com/damien-robotsix/robotsix-github-workflows/commit/3ee051ddf89e047598a2a6da5c0c110605c91d70))
+* pin-bump sweep is not coherent for first-party repos that pin each other (20260822T183322Z-pin-bump-sweep-is-not-coherent-for-first-51c7) ([#126](https://github.com/damien-robotsix/robotsix-github-workflows/issues/126)) ([513c343](https://github.com/damien-robotsix/robotsix-github-workflows/commit/513c343db7ee0164e60bf31412d5fcf9af17417b))
+* pin-bump-sweep's weekly cron has never run: job if: excludes the schedule trigger (20260821T105536Z-pin-bump-sweep-s-weekly-cron-has-never-r-b802) ([#102](https://github.com/damien-robotsix/robotsix-github-workflows/issues/102)) ([a3580a2](https://github.com/damien-robotsix/robotsix-github-workflows/commit/a3580a2cb85b4f53faf7e4741af5cb7b0bb47cab))
+* **pin-bump-sweep:** add GITHUB_STEP_SUMMARY, track skipped repos, resilient resolution ([#121](https://github.com/damien-robotsix/robotsix-github-workflows/issues/121)) ([31713aa](https://github.com/damien-robotsix/robotsix-github-workflows/commit/31713aa8d646489e00f375e628318506142288fb))
+* **pin-bump-sweep:** check out this repo, not the caller's ([#115](https://github.com/damien-robotsix/robotsix-github-workflows/issues/115)) ([6da79b1](https://github.com/damien-robotsix/robotsix-github-workflows/commit/6da79b160866c3efbd5d4b145ea30122064f017b))
+* **pin-bump-sweep:** justify the installation-wide token to zizmor ([#117](https://github.com/damien-robotsix/robotsix-github-workflows/issues/117)) ([a6ec1da](https://github.com/damien-robotsix/robotsix-github-workflows/commit/a6ec1daaa6273505e3bf8f90830b3ce2bf0bfb59))
+* **pin-bump-sweep:** make it workflow_call-only so it runs with a caller's credentials ([#113](https://github.com/damien-robotsix/robotsix-github-workflows/issues/113)) ([07c25b8](https://github.com/damien-robotsix/robotsix-github-workflows/commit/07c25b89e01e61368f85958b41673fa193b9d058))
+* **pin-bump-sweep:** mint a fleet-wide token by passing owner ([#116](https://github.com/damien-robotsix/robotsix-github-workflows/issues/116)) ([8e3f30e](https://github.com/damien-robotsix/robotsix-github-workflows/commit/8e3f30e71516dd9233a3fbda8acb0c135148d987))
+* **pin-bump:** target gh at the swept repo, not the CWD ([#118](https://github.com/damien-robotsix/robotsix-github-workflows/issues/118)) ([284c459](https://github.com/damien-robotsix/robotsix-github-workflows/commit/284c45946f90721cacf947f0a6943150566f84a8))
+* **python-ci:** skip the burndown nudge when the baseline is empty ([#124](https://github.com/damien-robotsix/robotsix-github-workflows/issues/124)) ([98b5cbb](https://github.com/damien-robotsix/robotsix-github-workflows/commit/98b5cbbec2a5c3b1343b4c9fae9b3fb0b3f0c4ef))
+* **python-security:** scan with TruffleHog before installing dependencies ([#137](https://github.com/damien-robotsix/robotsix-github-workflows/issues/137)) ([49e3747](https://github.com/damien-robotsix/robotsix-github-workflows/commit/49e37477e8c1a1a3436e1618750a632bf275359f))
+* **release-please:** retry the lock sync when the release branch moves ([#96](https://github.com/damien-robotsix/robotsix-github-workflows/issues/96)) ([2d66a20](https://github.com/damien-robotsix/robotsix-github-workflows/commit/2d66a20eef37f8b8dd5bb66cc134c76dbbf9ad39))
+* resolve composite actions absolutely in the remaining reusable workflows ([#123](https://github.com/damien-robotsix/robotsix-github-workflows/issues/123)) ([ddcc5b5](https://github.com/damien-robotsix/robotsix-github-workflows/commit/ddcc5b57eba4914708fc64dbf30c446a3fdbe4da))
+* scripts/pin-bump.py: sweep() and its four helpers have zero test coverage (20260821T185555Z-scripts-pin-bump-py-sweep-and-its-four-h-3d3a) ([#125](https://github.com/damien-robotsix/robotsix-github-workflows/issues/125)) ([9055f06](https://github.com/damien-robotsix/robotsix-github-workflows/commit/9055f06a3b70b8d7452482cde349ce3444d5fbfe))
+* **uv:** bump the default uv 0.8.15 → 0.12.5 across the shared workflows ([#136](https://github.com/damien-robotsix/robotsix-github-workflows/issues/136)) ([99d6b3d](https://github.com/damien-robotsix/robotsix-github-workflows/commit/99d6b3da069f81ddc7194520c5b1dca4347154a2))
+
 ## 0.0.0 (unreleased)
 
 - Add Rule 6 to `AGENT.md`: reusable-workflow Python must live in `scripts/*.py` as importable modules, never inline `python3 << 'PYEOF'` heredocs.
