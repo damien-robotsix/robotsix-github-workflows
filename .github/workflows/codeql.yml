@@ -49,7 +49,7 @@ jobs:
         # autobuild is a no-op for Python but included so this workflow
         # extends to compiled languages without changes
 
-      - uses: github/codeql-action/analyze@03e4368ac7daa2bd82b3e85262f3bf87ee112f57  # v3.36.0
+      - uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938  # v4.37.9
         with:
           # category disambiguates SARIF uploads when languages contains
           # multiple values
