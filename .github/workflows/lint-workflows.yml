@@ -58,10 +58,12 @@ jobs:
         with:
           fail_on_error: true
           # actionlint does not know two valid GitHub constructs we use:
-          # the "$/" in-repo reusable-workflow self-reference and the
-          # github.job_workflow_sha context. Suppress only those specific
-          # findings rather than the whole workflow-call / expression rules.
-          actionlint_flags: -ignore job_workflow_sha -ignore \$/.github/workflows
+          # the "$/" in-repo self-reference (reusable-workflow calls AND local
+          # action refs — zizmor's self-repository rule demands the "$/" form
+          # for both) and the github.job_workflow_sha context. Suppress only
+          # those specific findings rather than the whole workflow-call /
+          # expression / action-ref rules.
+          actionlint_flags: -ignore job_workflow_sha -ignore \$/.github
 
   zizmor:
     name: Zizmor
