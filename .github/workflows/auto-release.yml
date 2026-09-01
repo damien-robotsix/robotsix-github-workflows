@@ -138,12 +138,14 @@ jobs:
             exit 0
           fi
 
-          echo "has_fragments=true" >> "$GITHUB_OUTPUT"
-          echo "breaking=$BREAKING" >> "$GITHUB_OUTPUT"
-          echo "feature=$FEATURE" >> "$GITHUB_OUTPUT"
-          echo "bugfix=$BUGFIX" >> "$GITHUB_OUTPUT"
-          echo "misc=$MISC" >> "$GITHUB_OUTPUT"
-          echo "total=$TOTAL" >> "$GITHUB_OUTPUT"
+          {
+            echo "has_fragments=true"
+            echo "breaking=$BREAKING"
+            echo "feature=$FEATURE"
+            echo "bugfix=$BUGFIX"
+            echo "misc=$MISC"
+            echo "total=$TOTAL"
+          } >> "$GITHUB_OUTPUT"
 
           # Bump rules:
           #   any *.breaking.md OR *.feature.md present → minor bump
