@@ -1,0 +1,33 @@
+name: Dependabot auto-merge
+
+# This repo's own caller of the shared reusable workflow below. It lives in a
+# separate file on purpose: dependabot-auto-merge.yml is the fleet-shared
+# implementation (`on: workflow_call`) that every consumer repo pins by SHA.
+# Overwriting it with a caller (2026-08-09, #74) stranded the implementation
+# at a frozen historical SHA — any consumer whose pin-bump sweep advanced past
+# that commit called a file with no workflow_call trigger and died with a
+# workflow parse failure (robotsix-chat, 2026-09-01).
+#
+# The local `$/` reference always runs the implementation from this same
+# commit, so it needs no pin and can never drift.
+
+on:
+  pull_request:
+
+permissions: {}  # no workflow-level default; the job grants its own
+
+jobs:
+  auto-merge:
+    name: Dependabot auto-merge
+    # Dependabot dependency bumps only.
+    #
+    # release-please PRs are deliberately NOT auto-merged: that PR *is* the
+    # release gate. Auto-merging it would cut a release on every push to
+    # main, which makes the version number meaningless. Releases stay a
+    # human decision.
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    # contents: write and pull-requests: write needed to approve and merge PRs
+    permissions:
+      contents: write  # approve and merge the PR
+      pull-requests: write  # label and merge the PR
+    uses: $/.github/workflows/dependabot-auto-merge.yml
