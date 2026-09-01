@@ -36,13 +36,24 @@ jobs:
         with:
           persist-credentials: false
 
+      # The lint scripts live in THIS workflows repo, not in the caller's
+      # checkout — a bare `scripts/...` path resolves against the CALLER
+      # and fails for every consumer. Check the workflow repo out at the
+      # exact ref this reusable workflow runs from.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          repository: damien-robotsix/robotsix-github-workflows
+          ref: ${{ github.job_workflow_sha }}
+          path: _workflow-lib
+          persist-credentials: false
+
       - name: Validate SARIF upload permissions
         env:
           SARIF_WORKFLOWS: ${{ inputs.sarif-workflows }}
-        run: python3 scripts/lint_sarif_permissions.py
+        run: python3 _workflow-lib/scripts/lint_sarif_permissions.py
 
       - name: Validate trigger coverage
-        run: python3 scripts/lint_trigger_coverage.py
+        run: python3 _workflow-lib/scripts/lint_trigger_coverage.py
 
   actionlint:
     name: Actionlint

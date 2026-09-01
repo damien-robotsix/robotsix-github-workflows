@@ -51,10 +51,21 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # The check script lives in THIS workflows repo, not in the caller's
+      # checkout — a bare `scripts/...` path resolves against the CALLER
+      # and fails for every consumer. Check the workflow repo out at the
+      # exact ref this reusable workflow runs from.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          repository: damien-robotsix/robotsix-github-workflows
+          ref: ${{ github.job_workflow_sha }}
+          path: _workflow-lib
+          persist-credentials: false
+
       - name: Check config ownership
         env:
           DEPLOY_CONFIG_GLOB: ${{ inputs.deploy-config-glob }}
           ORCHESTRATION_ONLY_PATTERNS: ${{ inputs.orchestration-only-patterns }}
           UI_CONFIG_GLOB: ${{ inputs.ui-config-glob }}
           BASE_REF: ${{ inputs.base-ref }}
-        run: python3 scripts/config_ownership_check.py
+        run: python3 _workflow-lib/scripts/config_ownership_check.py
