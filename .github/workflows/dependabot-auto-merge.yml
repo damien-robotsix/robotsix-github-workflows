@@ -1,22 +1,84 @@
-name: Dependabot auto-merge
+name: Dependency Bot Auto-Merge
+
+# Auto-merges dependency-update PRs from Dependabot *or* Renovate. Filename kept
+# as dependabot-auto-merge.yml so existing callers don't break.
 
 on:
-  pull_request:
+  workflow_call:
 
-permissions: {}  # no workflow-level default; the job grants its own
+permissions:
+  contents: read
 
 jobs:
   auto-merge:
-    name: Dependabot auto-merge
-    # Dependabot dependency bumps only.
-    #
-    # release-please PRs are deliberately NOT auto-merged: that PR *is* the
-    # release gate. Auto-merging it would cut a release on every push to
-    # main, which makes the version number meaningless. Releases stay a
-    # human decision.
-    if: github.event.pull_request.user.login == 'dependabot[bot]'
-    # contents: write and pull-requests: write needed to approve and merge PRs
+    name: Auto-merge
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && (github.event.pull_request.user.login == 'dependabot[bot]' || github.event.pull_request.user.login == 'renovate[bot]' || github.event.pull_request.user.login == 'robotsix-mill[bot]')
+    timeout-minutes: 30
     permissions:
-      contents: write  # approve and merge the PR
-      pull-requests: write  # label and merge the PR
-    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/dependabot-auto-merge.yml@e33f19f0657947c239ffcbaf3b47f149571e2bc1  # main
+      contents: write        # auto-merge via gh pr merge
+      pull-requests: write   # label PR + gh pr merge
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+
+      # Dependabot exposes structured metadata; Renovate does not. The step is
+      # skipped for Renovate PRs and the merge proceeds without update-type.
+      - name: Fetch dependabot metadata
+        id: metadata
+        if: github.event.pull_request.user.login == 'dependabot[bot]'
+        uses: dependabot/fetch-metadata@21025c705c08248db411dc16f3619e6b5f9ea21a  # v2
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      # Labelling is cosmetic; merging is the point. In a repo that has never
+      # defined the label, `gh pr edit --add-label` exits 1 ("'Skip-Changelog'
+      # not found") and used to fail the job *before* the merge step ran — so
+      # every dependency PR in that repo sat open forever (63 had piled up
+      # fleet-wide by 2026-08-09). Never let labelling block the merge.
+      #
+      # Self-healing via `gh label create` is deliberately NOT done here: it
+      # needs `issues: write`, and a permission added to a reusable workflow
+      # must be granted by every caller or the call dies with startup_failure
+      # and no logs. Create the label repo-side instead.
+      - name: Label PR as Skip-Changelog
+        continue-on-error: true
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr edit "$PR_URL" --add-label "Skip-Changelog" \
+            || echo "::warning::could not apply the Skip-Changelog label — continuing to merge"
+
+      - name: Auto-merge dependency PR
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
+        run: |
+          echo "Bot: $GITHUB_ACTOR${UPDATE_TYPE:+ | update-type: $UPDATE_TYPE}"
+
+          set +e
+          output=$(gh pr merge --auto --squash --delete-branch "$PR_URL" 2>&1)
+          rc=$?
+          set -e
+
+          if [ "$rc" -eq 0 ]; then
+            echo "Auto-merge queued (protected repo — will merge when checks pass)"
+          # Two ways `--auto` is unavailable and we must merge ourselves:
+          #  - no branch protection, so there is nothing to queue behind;
+          #  - the repo has "Allow auto-merge" off. GitHub refuses to enable it
+          #    on PRIVATE repos on this plan, so PATCHing allow_auto_merge=true
+          #    silently stays false there (robotsix-invest, robotsix-website,
+          #    hexarchy). Both cases still poll checks before merging, so this
+          #    never merges a red PR.
+          elif echo "$output" | grep -qiE "protected branch rules not configured|not allowed for this repository|auto[- ]merge is not allowed|enablePullRequestAutoMerge"; then
+            echo "Auto-merge unavailable here — polling checks then merging directly"
+            gh pr checks "$PR_URL" --watch --fail-fast
+            gh pr merge --squash --delete-branch "$PR_URL"
+          else
+            printf '%s\n' "$output" >&2
+            exit "$rc"
+          fi
