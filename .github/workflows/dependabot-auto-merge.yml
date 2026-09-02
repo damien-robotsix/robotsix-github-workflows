@@ -5,6 +5,25 @@ name: Dependency Bot Auto-Merge
 
 on:
   workflow_call:
+    inputs:
+      app-id:
+        description: >
+          Optional GitHub App ID. When set (paired with the app-private-key
+          secret), the merge runs on a minted App installation token with
+          `workflows: write` — required to merge a PR that touches
+          `.github/workflows/**` (GITHUB_TOKEN is refused with "refusing to
+          allow a GitHub App to create or update workflow … without
+          `workflows` permission"; observed on this repo's own dependabot
+          PRs #109/#130, stuck 2026-08-21 → 2026-09-02). Leave unset to keep
+          the plain GITHUB_TOKEN behavior for PRs that never touch workflow
+          files.
+        required: false
+        type: string
+        default: ""
+    secrets:
+      app-private-key:
+        description: PEM private key of the GitHub App named by the app-id input.
+        required: false
 
 permissions:
   contents: read
@@ -13,7 +32,12 @@ jobs:
   auto-merge:
     name: Auto-merge
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && (github.event.pull_request.user.login == 'dependabot[bot]' || github.event.pull_request.user.login == 'renovate[bot]' || github.event.pull_request.user.login == 'robotsix-mill[bot]')
+    # pull_request_target is accepted because dependabot-triggered
+    # pull_request runs only receive Dependabot-scoped secrets — a caller
+    # that passes app-private-key (an Actions secret) must trigger on
+    # pull_request_target or the secret arrives empty. This job never
+    # checks out PR head code, so the elevated context is safe.
+    if: (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && (github.event.pull_request.user.login == 'dependabot[bot]' || github.event.pull_request.user.login == 'renovate[bot]' || github.event.pull_request.user.login == 'robotsix-mill[bot]')
     timeout-minutes: 30
     permissions:
       contents: write        # auto-merge via gh pr merge
@@ -23,6 +47,19 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           persist-credentials: false
+
+      # Minted only when the caller supplies App credentials; the merge and
+      # label steps fall back to GITHUB_TOKEN otherwise.
+      - name: Mint a GitHub App installation token
+        id: app-token
+        if: inputs.app-id != ''
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1  # v3.2.0
+        with:
+          app-id: ${{ inputs.app-id }}
+          private-key: ${{ secrets.app-private-key }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-workflows: write  # merge PRs that touch .github/workflows/**
 
       # Dependabot exposes structured metadata; Renovate does not. The step is
       # skipped for Renovate PRs and the merge proceeds without update-type.
@@ -47,7 +84,7 @@ jobs:
         continue-on-error: true
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
         run: |
           gh pr edit "$PR_URL" --add-label "Skip-Changelog" \
             || echo "::warning::could not apply the Skip-Changelog label — continuing to merge"
@@ -55,7 +92,7 @@ jobs:
       - name: Auto-merge dependency PR
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
         run: |
           echo "Bot: $GITHUB_ACTOR${UPDATE_TYPE:+ | update-type: $UPDATE_TYPE}"

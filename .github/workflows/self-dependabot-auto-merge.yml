@@ -11,8 +11,15 @@ name: Dependabot auto-merge
 # The local `$/` reference always runs the implementation from this same
 # commit, so it needs no pin and can never drift.
 
+# pull_request_target, not pull_request: dependabot-triggered pull_request
+# runs only receive Dependabot-scoped secrets, so RELEASE_APP_PRIVATE_KEY
+# (an Actions secret) would arrive empty and the App token could not be
+# minted. The called job never checks out PR head code, so the elevated
+# base-repo context is safe here.
 on:
-  pull_request:
+  # Safe here: the called job runs no PR head code — it only labels and
+  # merges via gh, and its checkout takes the base branch.
+  pull_request_target: # zizmor: ignore[dangerous-triggers]
 
 permissions: {}  # no workflow-level default; the job grants its own
 
@@ -31,3 +38,12 @@ jobs:
       contents: write  # approve and merge the PR
       pull-requests: write  # label and merge the PR
     uses: $/.github/workflows/dependabot-auto-merge.yml
+    # Every dependabot PR in THIS repo touches .github/workflows/**, which
+    # GITHUB_TOKEN cannot merge ("refusing to allow a GitHub App to create or
+    # update workflow … without `workflows` permission" — #109/#130 sat stuck
+    # 2026-08-21 → 2026-09-02). Supply the App so the shared workflow mints a
+    # token with workflows: write.
+    with:
+      app-id: ${{ vars.RELEASE_APP_ID }}
+    secrets:
+      app-private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
