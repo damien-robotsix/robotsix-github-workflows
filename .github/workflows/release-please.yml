@@ -123,6 +123,39 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           skip-labeling: ${{ inputs.skip-labeling }}
 
+      # Arm auto-merge (squash) on the release PR so it merges the instant its
+      # required checks report green — no human in the loop. This is only
+      # possible because the PR was opened with the App token above: a
+      # GITHUB_TOKEN PR has no checks at all, so there would be nothing for
+      # auto-merge to wait for and the PR would sit blocked forever (the
+      # 2026-09-02 central-deploy #834 gotcha). The `pr` output is set both
+      # when the PR is created and when it is updated, so this re-arms on
+      # every run; re-arming an already-armed PR is idempotent. Failing loudly
+      # on a genuine error is deliberate — an unmerged release PR is exactly
+      # the signal a maintainer must see.
+      - name: Arm auto-merge on the release PR
+        if: steps.release.outputs.pr != ''
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR: ${{ steps.release.outputs.pr }}
+        run: |
+          set -euo pipefail
+          # The release-please action just finished; the API can briefly lag
+          # behind the PR's state. Retry transient failures before surfacing a
+          # real one.
+          for attempt in 1 2 3; do
+            if gh pr merge --repo "$GITHUB_REPOSITORY" --auto --squash "$PR"; then
+              echo "Auto-merge armed on release PR #$PR — squash-merges when the required checks pass."
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::gh pr merge --auto failed (attempt $attempt/3) — retrying..." >&2
+              sleep 10
+            fi
+          done
+          echo "::error::could not arm auto-merge on release PR #$PR" >&2
+          exit 1
+
       # Only the lock-sync step below needs these; release-please itself needs
       # neither a checkout nor uv.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v5

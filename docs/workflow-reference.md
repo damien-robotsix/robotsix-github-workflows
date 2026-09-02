@@ -145,6 +145,13 @@ PR merges.  The caller keeps the triggers, the concurrency group and the
 release-PR guard; this workflow owns the token minting, the release-please
 action and the `uv.lock` sync.
 
+After the release-please action creates or updates the release PR, this
+workflow arms auto-merge (squash) on it with the App token, so the PR merges
+the moment its required checks pass — no human in the loop.  The repo must
+have "Allow auto-merge" enabled; because the PR is opened with an App token
+(rather than `GITHUB_TOKEN`) its `pull_request` CI actually runs, which is
+what makes a green auto-merge possible.
+
 | Input | Type | Default | Description |
 |---|---|---|---|
 | `app-id` | string | — | GitHub App ID for release authentication. |
