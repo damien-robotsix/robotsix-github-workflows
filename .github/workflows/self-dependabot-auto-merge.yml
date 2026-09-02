@@ -20,9 +20,9 @@ jobs:
   auto-merge:
     name: Dependabot auto-merge
     # Dependabot dependency bumps only. release-please PRs are NOT handled
-    # here — since 2026-09-02 (operator directive) the shared
-    # release-please.yml workflow arms squash auto-merge on its own release PR,
-    # so it flows green with no human; this caller must not double-handle it.
+    # here — the shared release-please.yml workflow manages release PRs
+    # independently (minting an App token to run CI checks); merge authority
+    # stays with the chat periodic agent per operator directive 2026-09-02.
     if: github.event.pull_request.user.login == 'dependabot[bot]'
     # contents: write and pull-requests: write needed to approve and merge PRs
     permissions:
