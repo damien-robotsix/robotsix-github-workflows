@@ -26,12 +26,10 @@ permissions: {}  # no workflow-level default; the job grants its own
 jobs:
   auto-merge:
     name: Dependabot auto-merge
-    # Dependabot dependency bumps only.
-    #
-    # release-please PRs are deliberately NOT auto-merged: that PR *is* the
-    # release gate. Auto-merging it would cut a release on every push to
-    # main, which makes the version number meaningless. Releases stay a
-    # human decision.
+    # Dependabot dependency bumps only. release-please PRs are NOT handled
+    # here — the shared release-please.yml workflow manages release PRs
+    # independently (minting an App token to run CI checks); merge authority
+    # stays with the chat periodic agent per operator directive 2026-09-02.
     if: github.event.pull_request.user.login == 'dependabot[bot]'
     # contents: write and pull-requests: write needed to approve and merge PRs
     permissions:

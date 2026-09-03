@@ -145,6 +145,11 @@ PR merges.  The caller keeps the triggers, the concurrency group and the
 release-PR guard; this workflow owns the token minting, the release-please
 action and the `uv.lock` sync.
 
+The release PR is opened with the App token (rather than `GITHUB_TOKEN`), so
+its `pull_request` CI actually runs — required checks are triggered and can
+report their status.  Merge authority stays with the chat periodic agent,
+which decides merge as a function of the release content.
+
 | Input | Type | Default | Description |
 |---|---|---|---|
 | `app-id` | string | — | GitHub App ID for release authentication. |
