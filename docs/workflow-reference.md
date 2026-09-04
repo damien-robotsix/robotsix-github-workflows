@@ -26,6 +26,23 @@ this repository.
 | `python-version` | string | `3.14` | Python version for the modules-drift job. |
 | `uv-version` | string | `0.8.15` | uv version for the modules-drift job. |
 
+## `bump.yml`
+
+| Input | Type | Default | Description |
+|---|---|---|---|
+| `bump-mode` | string | — | Bump mode: "deps" (uv lock --upgrade-package) or "pins" (scripts/pin-bump.py per-repo). Required. |
+| `packages` | string | — | Space-separated package names; empty = all git-sourced (pins). Required. |
+| `uv-version` | string | `0.12.5` | uv version to install. |
+| `default-branch` | string | `main` | Base branch for the PR and git push target. |
+| `bump-branch` | string | `deps-bump/first-party` | Branch to force-push the bump commit to. |
+| `app-id` | string | — | GitHub App ID for PR creation. Required. |
+| `permission-contents` | string | `write` | Minted token's repo contents scope (push bump branch). |
+| `permission-pull-requests` | string | `write` | Minted token's PR scope (create/update PRs). |
+
+| Secret | Required | Description |
+|---|---|---|
+| `app-private-key` | yes | GitHub App private key (PEM) paired with `app-id`. |
+
 ## `codeql.yml`
 
 | Input | Type | Default | Description |
