@@ -20,6 +20,8 @@ _spec.loader.exec_module(_module)
 check = _module.check
 _action_file_exists = _module._action_file_exists
 _collect_local_refs_from_doc = _module._collect_local_refs_from_doc
+_own_repo_action_prefix = _module._own_repo_action_prefix
+_DEFAULT_OWN_REPO = _module._DEFAULT_OWN_REPO
 
 
 # ---------------------------------------------------------------------------
@@ -110,6 +112,29 @@ class TestCollectLocalRefsFromDoc:
         }
         assert _collect_local_refs_from_doc(doc) == ["python-setup"]
 
+    def test_own_repo_prefix_follows_runtime_repository(
+        self, monkeypatch
+    ) -> None:
+        # A rename/fork changes GITHUB_REPOSITORY; the validator must follow
+        # the workflows' actual own-repo refs without any source edit.
+        monkeypatch.setenv("GITHUB_REPOSITORY", "acme/forked-workflows")
+        doc = {
+            "jobs": {
+                "a": {
+                    "steps": [
+                        {
+                            "uses": "acme/forked-workflows/.github/actions/python-setup@abc123"
+                        },
+                        {
+                            "uses": "damien-robotsix/robotsix-github-workflows/.github/actions/python-setup@abc123"
+                        },
+                    ]
+                }
+            }
+        }
+        # Only the ref matching the runtime repository is treated as own-repo.
+        assert _collect_local_refs_from_doc(doc) == ["python-setup"]
+
     def test_non_dict_returns_empty(self) -> None:
         assert _collect_local_refs_from_doc(None) == []
         assert _collect_local_refs_from_doc([]) == []
@@ -123,6 +148,34 @@ class TestCollectLocalRefsFromDoc:
             }
         }
         assert _collect_local_refs_from_doc(doc) == []
+
+
+# ---------------------------------------------------------------------------
+# _own_repo_action_prefix
+# ---------------------------------------------------------------------------
+
+
+class TestOwnRepoActionPrefix:
+    def test_derives_from_github_repository_env(self, monkeypatch) -> None:
+        monkeypatch.setenv("GITHUB_REPOSITORY", "acme/forked-workflows")
+        assert (
+            _own_repo_action_prefix()
+            == "acme/forked-workflows/.github/actions/"
+        )
+
+    def test_falls_back_to_default_repo(self, monkeypatch) -> None:
+        monkeypatch.delenv("GITHUB_REPOSITORY", raising=False)
+        assert (
+            _own_repo_action_prefix()
+            == f"{_DEFAULT_OWN_REPO}/.github/actions/"
+        )
+
+    def test_explicit_repository_overrides_env(self, monkeypatch) -> None:
+        monkeypatch.setenv("GITHUB_REPOSITORY", "acme/forked-workflows")
+        assert (
+            _own_repo_action_prefix("other/repo")
+            == "other/repo/.github/actions/"
+        )
 
 
 # ---------------------------------------------------------------------------

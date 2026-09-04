@@ -37,10 +37,29 @@ except ImportError:
     import yaml
 
 _LOCAL_ACTION_PREFIX = "./.github/actions/"
-# Absolute prefix for this repo's own composite actions when referenced
-# from reusable workflows (which resolve ./  against the *caller* repo,
-# not the workflow repo).  The @<sha> suffix is stripped during matching.
-_OWN_REPO_ACTION_PREFIX = "damien-robotsix/robotsix-github-workflows/.github/actions/"
+# Path segment that follows ``<owner>/<repo>`` in an absolute reference to
+# this repo's own composite actions.
+_OWN_REPO_ACTIONS_SUFFIX = "/.github/actions/"
+# Fallback ``<owner>/<repo>`` used only when GITHUB_REPOSITORY is not set
+# (local runs / unit tests).  This is the single place the repo slug is
+# defined; do not re-hardcode it elsewhere.
+_DEFAULT_OWN_REPO = "damien-robotsix/robotsix-github-workflows"
+
+
+def _own_repo_action_prefix(repository: str | None = None) -> str:
+    """Return the absolute ``uses:`` prefix for this repo's own composite actions.
+
+    Reusable workflows reference their own composite actions with an
+    absolute ``<owner>/<repo>/.github/actions/<name>@<sha>`` ref because a
+    relative ``./`` path resolves against the *caller* repo, not the
+    workflow repo.  The ``<owner>/<repo>`` slug is derived from the live
+    ``GITHUB_REPOSITORY`` runtime context (always set inside GitHub
+    Actions), falling back to :data:`_DEFAULT_OWN_REPO` outside CI.  Because
+    the prefix comes from the same context the workflows run in, resolution
+    can never drift from the workflows' actual own-repo action refs.
+    """
+    repo = repository or os.environ.get("GITHUB_REPOSITORY") or _DEFAULT_OWN_REPO
+    return f"{repo}{_OWN_REPO_ACTIONS_SUFFIX}"
 
 
 def _action_file_exists(actions_dir: str, name: str) -> bool:
@@ -51,13 +70,22 @@ def _action_file_exists(actions_dir: str, name: str) -> bool:
     )
 
 
-def _collect_local_refs_from_doc(doc: object) -> list[str]:
+def _collect_local_refs_from_doc(
+    doc: object, own_repo_prefix: str | None = None
+) -> list[str]:
     """Collect every local (or own-repo absolute) action reference from a parsed doc.
 
     Returns action *names* (e.g. ``"python-setup"``) for both:
     - ``uses: ./.github/actions/<name>``
-    - ``uses: damien-robotsix/robotsix-github-workflows/.github/actions/<name>@<sha>``
+    - ``uses: <owner>/<repo>/.github/actions/<name>@<sha>``
+
+    The own-repo absolute prefix is derived from the runtime context via
+    :func:`_own_repo_action_prefix` unless supplied explicitly by the
+    caller (computed once per :func:`check` run).
     """
+    if own_repo_prefix is None:
+        own_repo_prefix = _own_repo_action_prefix()
+
     refs: list[str] = []
     if not isinstance(doc, dict):
         return refs
@@ -81,9 +109,9 @@ def _collect_local_refs_from_doc(doc: object) -> list[str]:
             if uses.startswith(_LOCAL_ACTION_PREFIX):
                 name = uses[len(_LOCAL_ACTION_PREFIX) :]
                 refs.append(name)
-            elif uses.startswith(_OWN_REPO_ACTION_PREFIX):
+            elif uses.startswith(own_repo_prefix):
                 # Strip prefix and optional @<sha> suffix
-                rest = uses[len(_OWN_REPO_ACTION_PREFIX) :]
+                rest = uses[len(own_repo_prefix) :]
                 name = rest.split("@", 1)[0]
                 refs.append(name)
 
@@ -114,6 +142,7 @@ def check(
 
     errors: list[str] = []
     referenced: set[str] = set()
+    own_repo_prefix = _own_repo_action_prefix()
 
     for path in workflow_paths:
         with open(path) as fh:
@@ -123,7 +152,7 @@ def check(
                 errors.append(f"{path}: invalid YAML — {exc}")
                 continue
 
-        for name in _collect_local_refs_from_doc(doc):
+        for name in _collect_local_refs_from_doc(doc, own_repo_prefix):
             if not name or "/" in name:
                 errors.append(f"{path}: invalid local action reference '{name}'")
                 continue
