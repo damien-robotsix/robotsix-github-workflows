@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.1](https://github.com/damien-robotsix/robotsix-github-workflows/compare/v1.0.0...v1.0.1) (2026-09-03)
+
+
+### Bug Fixes
+
+* **ci:** restore workflow_call on the shared dependabot-auto-merge workflow ([#139](https://github.com/damien-robotsix/robotsix-github-workflows/issues/139)) ([290e985](https://github.com/damien-robotsix/robotsix-github-workflows/commit/290e985800ff5a6ad6e05382aaaf8ff21e0e392d))
+* **dependabot-auto-merge:** mint an App token so workflow-touching PRs can merge ([#145](https://github.com/damien-robotsix/robotsix-github-workflows/issues/145)) ([ad42434](https://github.com/damien-robotsix/robotsix-github-workflows/commit/ad424349c05a3336cb418be5f37f0b2fb9e82934))
+* **lint:** broaden actionlint $/-ignore to cover local action refs ([#142](https://github.com/damien-robotsix/robotsix-github-workflows/issues/142)) ([daa74f7](https://github.com/damien-robotsix/robotsix-github-workflows/commit/daa74f7c13e04bc77109021922e3fcaa9644b75c))
+* **lint:** run shared lint scripts from the workflow repo, not the caller ([#143](https://github.com/damien-robotsix/robotsix-github-workflows/issues/143)) ([8e713c7](https://github.com/damien-robotsix/robotsix-github-workflows/commit/8e713c7c8867caa653483a934e2b74a62e31fc0b))
+
 ## 1.0.0 (2026-08-31)
 
 
