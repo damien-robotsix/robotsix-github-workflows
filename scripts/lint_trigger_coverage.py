@@ -45,6 +45,18 @@ _EVENT_NEQ_RE = re.compile(
 )
 
 
+def _on_block(doc: dict) -> object:
+    """Return the workflow's ``on:`` block.
+
+    PyYAML implements YAML 1.1, which coerces the bare ``on`` key to the
+    boolean ``True`` (``off`` → ``False``).  GitHub Actions' own parser
+    keeps ``on`` as a string, so this helper accepts both spellings.
+    """
+    if "on" in doc:
+        return doc["on"]
+    return doc.get(True)
+
+
 def _extract_event_names(on_block: object) -> set[str]:
     """Return the set of event names declared in the ``on:`` block."""
     events: set[str] = set()
@@ -89,7 +101,7 @@ def check(*, workflow_dir: str = ".github/workflows") -> int:
         if not isinstance(doc, dict) or "jobs" not in doc:
             continue
 
-        triggers = _extract_event_names(doc.get("on"))
+        triggers = _extract_event_names(_on_block(doc))
         if not triggers:
             continue
 
@@ -100,16 +112,24 @@ def check(*, workflow_dir: str = ".github/workflows") -> int:
             if not if_expr or not isinstance(if_expr, str):
                 continue
 
+            # A `workflow_call` trigger is exempt from the equality check: the
+            # callers, not this workflow, choose the runtime event, so any
+            # event name can occur (e.g. dependabot-auto-merge.yml checks for
+            # 'pull_request' even though its own on: declares only
+            # workflow_call). The inequality check below still applies.
+            skip_eq = "workflow_call" in triggers
+
             # github.event_name == 'X' — flag when X is not a declared trigger
-            for m in _EVENT_EQ_RE.finditer(if_expr):
-                target = m.group(1)
-                if target not in triggers:
-                    errors.append(
-                        f"{path}: job '{job_id}' has "
-                        f"`if: github.event_name == '{target}'` "
-                        f"but '{target}' is not a declared "
-                        f"workflow trigger (on: {sorted(triggers)})."
-                    )
+            if not skip_eq:
+                for m in _EVENT_EQ_RE.finditer(if_expr):
+                    target = m.group(1)
+                    if target not in triggers:
+                        errors.append(
+                            f"{path}: job '{job_id}' has "
+                            f"`if: github.event_name == '{target}'` "
+                            f"but '{target}' is not a declared "
+                            f"workflow trigger (on: {sorted(triggers)})."
+                        )
 
             # github.event_name != 'X' — flag when X is the ONLY trigger
             for m in _EVENT_NEQ_RE.finditer(if_expr):
