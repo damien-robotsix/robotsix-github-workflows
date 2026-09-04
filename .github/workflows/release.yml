@@ -20,7 +20,7 @@ jobs:
     permissions:
       contents: write       # release commit, tag, GitHub Release
       pull-requests: write  # open/update the release PR
-    uses: ./.github/workflows/release-please.yml
+    uses: $/.github/workflows/release-please.yml
     with:
       app-id: ${{ vars.RELEASE_APP_ID }}
       sync-uv-lock: false
