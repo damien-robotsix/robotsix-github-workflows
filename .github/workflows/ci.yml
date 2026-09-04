@@ -55,3 +55,19 @@ jobs:
           python-version: "3.14"
       - name: Validate local action references
         run: python3 scripts/check_local_action_refs.py --check-orphans
+
+  pytest:
+    name: Run Python unit test suites
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Install test dependencies
+        run: |
+          python3 -m pip install --quiet pytest pyyaml
+      - name: Run pytest suite
+        run: python3 -m pytest tests/ -v
