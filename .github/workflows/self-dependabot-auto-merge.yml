@@ -8,7 +8,7 @@ name: Dependabot auto-merge
 # that commit called a file with no workflow_call trigger and died with a
 # workflow parse failure (robotsix-chat, 2026-09-01).
 #
-# The local `$/` reference always runs the implementation from this same
+# The local `./` reference always runs the implementation from this same
 # commit, so it needs no pin and can never drift.
 
 # pull_request_target, not pull_request: dependabot-triggered pull_request
@@ -35,7 +35,7 @@ jobs:
     permissions:
       contents: write  # approve and merge the PR
       pull-requests: write  # label and merge the PR
-    uses: $/.github/workflows/dependabot-auto-merge.yml
+    uses: ./.github/workflows/dependabot-auto-merge.yml
     # Every dependabot PR in THIS repo touches .github/workflows/**, which
     # GITHUB_TOKEN cannot merge ("refusing to allow a GitHub App to create or
     # update workflow … without `workflows` permission" — #109/#130 sat stuck

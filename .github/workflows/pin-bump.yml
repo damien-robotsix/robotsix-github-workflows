@@ -71,7 +71,7 @@ jobs:
   bump:
     name: Bump git pins
     permissions: {}
-    uses: $/.github/workflows/bump.yml
+    uses: ./.github/workflows/bump.yml
     with:
       bump-mode: pins
       packages: ${{ inputs.packages }}
