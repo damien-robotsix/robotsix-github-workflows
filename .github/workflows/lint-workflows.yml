@@ -71,7 +71,7 @@ jobs:
           # actionlint does not know the github.job_workflow_sha context.
           # Suppress only that specific finding rather than the whole
           # expression rule. In-repo self-references use the documented
-          # "./.github/workflows/<name>.yml" form, which actionlint accepts.
+          # "$/.github/workflows/<name>.yml" form, which actionlint accepts.
           actionlint_flags: -ignore job_workflow_sha
 
   zizmor:
