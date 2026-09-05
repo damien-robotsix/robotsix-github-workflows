@@ -149,6 +149,28 @@ class TestCheck:
         )
         assert check(workflow_dir=str(wf_dir)) == 0
 
+    def test_job_eq_caller_event_ok_with_workflow_call(
+        self, tmp_path: Path
+    ) -> None:
+        """workflow_call workflows may reference caller-side events."""
+        wf_dir = tmp_path / "workflows"
+        wf_dir.mkdir()
+        _write_workflow(
+            wf_dir,
+            "test.yml",
+            """
+            on:
+              workflow_call:
+            jobs:
+              auto-merge:
+                if: ${{ github.event_name == 'pull_request' }}
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo hi
+            """,
+        )
+        assert check(workflow_dir=str(wf_dir)) == 0
+
     def test_job_no_if(self, tmp_path: Path) -> None:
         """Job without an if: — passes."""
         wf_dir = tmp_path / "workflows"
