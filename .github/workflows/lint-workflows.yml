@@ -68,13 +68,11 @@ jobs:
       - uses: reviewdog/action-actionlint@49cb3ce06e5d81452e14b38ad34e4b12a8acfe2b  # v1.73.3
         with:
           fail_on_error: true
-          # actionlint does not know two valid GitHub constructs we use:
-          # the "$/" in-repo self-reference (reusable-workflow calls AND local
-          # action refs — zizmor's self-repository rule demands the "$/" form
-          # for both) and the github.job_workflow_sha context. Suppress only
-          # those specific findings rather than the whole workflow-call /
-          # expression / action-ref rules.
-          actionlint_flags: -ignore job_workflow_sha -ignore \$/.github
+          # actionlint does not know the github.job_workflow_sha context.
+          # Suppress only that specific finding rather than the whole
+          # expression rule. In-repo self-references use the documented
+          # "./.github/workflows/<name>.yml" form, which actionlint accepts.
+          actionlint_flags: -ignore job_workflow_sha
 
   zizmor:
     name: Zizmor
