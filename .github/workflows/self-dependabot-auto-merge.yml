@@ -8,7 +8,7 @@ name: Dependabot auto-merge
 # that commit called a file with no workflow_call trigger and died with a
 # workflow parse failure (robotsix-chat, 2026-09-01).
 #
-# The local `./` reference always runs the implementation from this same
+# The local `$/` reference always runs the implementation from this same
 # commit, so it needs no pin and can never drift.
 
 # pull_request_target, not pull_request: dependabot-triggered pull_request
