@@ -7,7 +7,13 @@ test: pytest shell-tests  ## Run all tests (Python + shell)
 
 pytest:  ## Run Python/pytest test suites
 	pip install pytest --quiet
-	pytest tests/ -v
+	pytest \
+		tests/test-pin-bump.py \
+		tests/test-lint-sarif-permissions.py \
+		tests/test-check-local-action-refs.py \
+		tests/test-lint-trigger-coverage.py \
+		tests/test-config-ownership-check.py \
+		-v
 
 shell-tests:  ## Run shell test scripts
 	bash tests/test-apply-branch-protection.sh

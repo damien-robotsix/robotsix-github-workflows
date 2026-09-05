@@ -66,3 +66,13 @@ Commit subjects and PR titles must follow the
 [release-please](https://github.com/googleapis/release-please) generates
 `CHANGELOG.md` from these commit messages — do **not** add changelog
 fragments or use towncrier.
+
+## Testing conventions
+
+### Invoke pytest with an explicit file list, never bare `pytest tests/`
+
+This repo's unit-test files use hyphenated names (`tests/test-*.py`), not
+pytest's default `test_*.py`.  Always invoke pytest with the explicit file
+list (as in the `Makefile` `pytest` target and `.github/workflows/ci.yml`),
+never bare `pytest tests/` — pytest collects 0 tests from `test-*.py` and
+exits 5, silently producing a gate that runs nothing.
