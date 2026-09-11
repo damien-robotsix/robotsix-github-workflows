@@ -116,7 +116,7 @@ jobs:
       # unaffected — their clone needs no token).
       contents: read
     steps:
-      - uses: damien-robotsix/robotsix-github-workflows/.github/actions/python-setup@31713aa8d646489e00f375e628318506142288fb
+      - uses: damien-robotsix/robotsix-github-workflows/.github/actions/python-setup@fb907a46b00693a117ca6b975da6e7b0f8238491
         with:
           python-version: ${{ inputs.python-version }}
           uv-version: ${{ inputs.uv-version }}
@@ -301,7 +301,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: damien-robotsix/robotsix-github-workflows/.github/actions/python-setup@31713aa8d646489e00f375e628318506142288fb
+      - uses: damien-robotsix/robotsix-github-workflows/.github/actions/python-setup@fb907a46b00693a117ca6b975da6e7b0f8238491
         with:
           python-version: ${{ inputs.python-version }}
           uv-version: ${{ inputs.uv-version }}
@@ -344,7 +344,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: damien-robotsix/robotsix-github-workflows/.github/actions/python-setup@31713aa8d646489e00f375e628318506142288fb
+      - uses: damien-robotsix/robotsix-github-workflows/.github/actions/python-setup@fb907a46b00693a117ca6b975da6e7b0f8238491
         with:
           python-version: ${{ inputs.python-version }}
           uv-version: ${{ inputs.uv-version }}
@@ -382,7 +382,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: damien-robotsix/robotsix-github-workflows/.github/actions/python-setup@31713aa8d646489e00f375e628318506142288fb
+      - uses: damien-robotsix/robotsix-github-workflows/.github/actions/python-setup@fb907a46b00693a117ca6b975da6e7b0f8238491
         with:
           python-version: ${{ inputs.python-version }}
           uv-version: ${{ inputs.uv-version }}
