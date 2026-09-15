@@ -24,6 +24,11 @@ jobs:
   publish:
     name: Publish
     runs-on: ubuntu-latest
+    env:
+      # Resolved once so the metadata, by-digest push and hardening base ref
+      # all agree. Cannot be a workflow_call input default (Rule 5: dynamic
+      # defaults are rejected), so it is computed here.
+      IMAGE_NAME: ${{ inputs.image-name != '' && inputs.image-name || format('ghcr.io/{0}', github.repository) }}
     permissions:
       contents: read
       packages: write         # required to push images to ghcr.io
@@ -46,16 +51,58 @@ jobs:
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302  # v6
         with:
-          images: ${{ inputs.image-name != '' && inputs.image-name || format('ghcr.io/{0}', github.repository) }}
+          images: ${{ env.IMAGE_NAME }}
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
             type=sha
 
-      - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7
+      # Stage 1 of the fleet-wide security-hardening build: build the
+      # component's own Dockerfile and push it by digest only (no consumer
+      # tag), so no un-patched image is ever tagged in the registry. The
+      # digest gives Stage 2 a registry base to build FROM. Provenance/SBOM
+      # are disabled here — they belong on the final (patched) image.
+      - name: Build base image (push by digest, untagged)
+        id: base
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7
         with:
           context: .
           file: ${{ inputs.dockerfile }}
+          provenance: false
+          sbom: false
+          outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+
+      # Read the base image's configured USER so the hardening layer can run
+      # apt as root and then restore the original user, leaving runtime
+      # behaviour unchanged.
+      - name: Inspect base image config
+        env:
+          BASE_REF: ${{ env.IMAGE_NAME }}@${{ steps.base.outputs.digest }}
+        run: |
+          docker buildx imagetools inspect "$BASE_REF" \
+            --format '{{json .Image}}' > /tmp/base-config.json
+
+      - name: Render hardening Dockerfile
+        env:
+          BASE_REF: ${{ env.IMAGE_NAME }}@${{ steps.base.outputs.digest }}
+        run: |
+          mkdir -p /tmp/harden
+          python3 scripts/render_harden_dockerfile.py \
+            --base-ref "$BASE_REF" \
+            --config /tmp/base-config.json \
+            --out /tmp/harden/Dockerfile
+          cat /tmp/harden/Dockerfile
+
+      # Stage 2: build the hardening layer (apt security upgrade) on top of
+      # the by-digest base and push it to the consumer tags WITH provenance +
+      # SBOM. This is the image the Trivy gate below scans and consumers pull,
+      # so it carries the patched packages (e.g. perl-base >= 5.40.1-6+deb13u1).
+      - name: Build and push hardened image
+        id: build
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7
+        with:
+          context: /tmp/harden
+          file: /tmp/harden/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

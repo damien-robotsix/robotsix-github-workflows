@@ -13,6 +13,7 @@ pytest:  ## Run Python/pytest test suites
 		tests/test-check-local-action-refs.py \
 		tests/test-lint-trigger-coverage.py \
 		tests/test-config-ownership-check.py \
+		tests/test-render-harden-dockerfile.py \
 		-v
 
 shell-tests:  ## Run shell test scripts
