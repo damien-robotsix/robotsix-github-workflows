@@ -81,4 +81,5 @@ jobs:
             tests/test-check-local-action-refs.py \
             tests/test-lint-trigger-coverage.py \
             tests/test-config-ownership-check.py \
+            tests/test-render-harden-dockerfile.py \
             -v

@@ -49,16 +49,53 @@ jobs:
         run: |
           BASE="${INPUT_IMAGE_NAME:-ghcr.io/$GITHUB_REPOSITORY}"
           echo "image=${BASE}:pr-scan" >> "$GITHUB_OUTPUT"
+          echo "base-image=${BASE}:pr-scan-base" >> "$GITHUB_OUTPUT"
 
-      - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7
+      # Stage 1 of the fleet-wide security-hardening build: build the
+      # component's own Dockerfile into the local daemon (no push). The
+      # scanned image (Stage 2) is layered on top of this.
+      - name: Build base image (local)
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7
         with:
           context: .
           file: ${{ inputs.dockerfile }}
           push: false
           load: true
-          tags: ${{ steps.image-ref.outputs.image }}
+          tags: ${{ steps.image-ref.outputs.base-image }}
           cache-from: ${{ inputs.use-gha-cache && 'type=gha' || '' }}
           cache-to: ${{ inputs.use-gha-cache && 'type=gha,mode=max' || '' }}
+
+      # Read the base image's configured USER so the hardening layer can run
+      # apt as root and then restore the original user.
+      - name: Inspect base image config
+        env:
+          BASE_TAG: ${{ steps.image-ref.outputs.base-image }}
+        run: |
+          docker inspect --format '{{json .Config}}' "$BASE_TAG" > /tmp/base-config.json
+
+      - name: Render hardening Dockerfile
+        env:
+          BASE_TAG: ${{ steps.image-ref.outputs.base-image }}
+        run: |
+          mkdir -p /tmp/harden
+          python3 scripts/render_harden_dockerfile.py \
+            --base-ref "$BASE_TAG" \
+            --config /tmp/base-config.json \
+            --out /tmp/harden/Dockerfile
+          cat /tmp/harden/Dockerfile
+
+      # Stage 2: layer the apt security upgrade on top and load the result as
+      # the image the Trivy gate scans, so the scan reflects the patched
+      # packages (e.g. perl-base >= 5.40.1-6+deb13u1) that the published image
+      # will carry. Built on the `default` (docker) builder so it can resolve
+      # `FROM <locally-loaded base>` from the daemon image store.
+      - name: Build hardened image (local)
+        env:
+          SCAN_IMAGE: ${{ steps.image-ref.outputs.image }}
+        run: |
+          docker buildx build --builder default --load \
+            -t "$SCAN_IMAGE" \
+            -f /tmp/harden/Dockerfile /tmp/harden
 
       # Gate: CRITICAL and HIGH fixable CVEs block the pipeline. Runs in
       # table format so the failing CVE row is visible in the CI log
