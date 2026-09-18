@@ -15,10 +15,12 @@ jobs:
 | `python-security.yml` | bandit / pip-audit / trufflehog security scan |
 | `python-docs.yml` | mkdocs build/deploy |
 | `auto-release.yml` | scheduled towncrier-driven `0.x` tag-cutting release workflow (deprecated — use `release-please.yml`) |
+| `release-please.yml` | conventional-commits release automation (replaces deprecated `auto-release.yml`) |
 | `docker-release.yml` | build + push container image |
 | `docker-pr-scan.yml` | build (no push) + Trivy CRITICAL/HIGH scan for PRs |
 | `scan-container.yml` | weekly Trivy rescan of published :main image (SARIF, report-only) |
 | `deps-bump.yml` | scheduled `uv lock --upgrade` PR |
+| `bump.yml` | shared bump engine behind the `deps-bump.yml` / `pin-bump.yml` wrappers (`bump-mode: deps|pins`) |
 | `dependabot-auto-merge.yml` | auto-merge Dependabot PRs (protected & unprotected branch handling) |
 | `baseline-check.yml` | enforce AGENT.md and .github/dependabot.yml baseline rules |
 | `codeql.yml` | CodeQL static analysis |
@@ -78,6 +80,45 @@ release commit reachable.
 
 > **Note:** This workflow is deprecated in favour of `release-please.yml`,
 > which uses conventional commits instead of towncrier fragments.
+
+## `release-please.yml` — caller template
+
+Conventional-commit release automation — the recommended replacement for
+the deprecated `auto-release.yml`.  The caller keeps the triggers and the
+release-PR guard; this workflow owns token minting, the release-please
+action and the `uv.lock` sync.  Consumer repos add a wrapper workflow
+(e.g. `.github/workflows/release.yml`) that triggers on pushes to the
+default branch + manual dispatch:
+
+```yaml
+name: Release Please
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+jobs:
+  release:
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/release-please.yml@<sha>
+    with:
+      app-id: ${{ vars.RELEASE_APP_ID }}  # repo/org variable, not a secret
+    # Optional inputs — defaults shown:
+    #   runs-on: "ubuntu-latest"
+    #   default-branch: "main"
+    #   timeout-minutes: 10
+    #   sync-uv-lock: true
+    #   skip-labeling: false
+    #   harden-runner: false
+    #   permission-contents: "write"
+    #   permission-pull-requests: "write"
+    #   permission-workflows: "write"
+    secrets:
+      app-private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}  # GitHub App private key
+```
+
+The release PR is opened with the App token (never `GITHUB_TOKEN`), so
+its `pull_request` CI actually runs and required checks can report their
+status.  `sync-uv-lock` regenerates `uv.lock` on the release branch after
+the version bump — turn it off for repos with no `uv.lock`.
 
 ## `docker-pr-scan.yml` — caller template
 
@@ -393,6 +434,43 @@ jobs:
     - tests
     - '**/*.test.py'
   ```
+
+## `bump.yml` — caller template
+
+Shared bump *engine* behind the `deps-bump.yml` and `pin-bump.yml`
+wrappers — both are thin delegates that only set `bump-mode`.  Consumers
+that need the engine directly, or a caller-controlled `bump-mode`, add a
+wrapper workflow (e.g. `.github/workflows/bump.yml`) that triggers on a
+weekly schedule + manual dispatch:
+
+```yaml
+name: Bump
+on:
+  schedule:
+    - cron: "0 8 * * 1"  # Monday 08:00 UTC
+  workflow_dispatch:
+jobs:
+  bump:
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/bump.yml@<sha>
+    with:
+      bump-mode: "deps"   # "deps" = uv lock --upgrade-package; "pins" = scripts/pin-bump.py per-repo
+      packages: "robotsix-mill robotsix-llmio"  # space-separated; omit for "pins" to bump all git-sourced
+      app-id: "3752211"   # fleet GitHub App
+    # Optional inputs — defaults shown:
+    #   uv-version: "0.12.5"
+    #   default-branch: "main"
+    #   bump-branch: "deps-bump/first-party"
+    #   permission-contents: "write"
+    #   permission-pull-requests: "write"
+    secrets:
+      app-private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}  # GitHub App private key
+```
+
+The workflow pushes commits and creates PRs with a caller-supplied GitHub
+App credential — never `GITHUB_TOKEN`, which suppresses workflow runs on
+the bump PR (so CI never fires).  `app-id` + `app-private-key` are
+required.  For standard fleet usage prefer the self-documenting
+`deps-bump.yml` / `pin-bump.yml` wrappers.
 
 ## `deps-bump.yml` — caller template
 
