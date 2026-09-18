@@ -15,7 +15,7 @@ concurrency:
 jobs:
   lint-workflows:
     name: Lint workflows
-    uses: $/.github/workflows/lint-workflows.yml
+    uses: ./.github/workflows/lint-workflows.yml
     with:
       run-actionlint: true
       run-zizmor: true
