@@ -30,6 +30,26 @@ jobs:
       - name: Run config-ownership integration test
         run: bash tests/test-config-ownership-check.sh
 
+  test-apply-branch-protection:
+    name: Test apply-branch-protection script
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          persist-credentials: false
+      - name: Run apply-branch-protection integration test
+        run: bash tests/test-apply-branch-protection.sh
+
+  test-baseline-check:
+    name: Test baseline-check workflow
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          persist-credentials: false
+      - name: Run baseline-check integration test
+        run: bash tests/test-baseline-check.sh
+
   action-validator:
     name: Validate workflow YAML schema
     runs-on: ubuntu-latest
