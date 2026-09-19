@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/damien-robotsix/robotsix-github-workflows/compare/v1.0.1...v1.0.2) (2026-09-19)
+
+
+### Bug Fixes
+
+* Fix invalid `$/.github/workflows/<name>.yml` local reusable-workflow self-references (20260918T102143Z-fix-invalid-github-workflows-name-yml-lo-edd0) ([#171](https://github.com/damien-robotsix/robotsix-github-workflows/issues/171)) ([c07321f](https://github.com/damien-robotsix/robotsix-github-workflows/commit/c07321f2acb68f8af664664e13d5d407f5401424))
+
 ## [1.0.1](https://github.com/damien-robotsix/robotsix-github-workflows/compare/v1.0.0...v1.0.1) (2026-09-03)
 
 
