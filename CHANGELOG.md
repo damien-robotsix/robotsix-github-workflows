@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.3](https://github.com/damien-robotsix/robotsix-github-workflows/compare/v1.0.2...v1.0.3) (2026-09-22)
+
+
+### Bug Fixes
+
+* Fix bump-setup repositories-input metadata (literal `${{ github.repository }}`) so consumers can call shared bump.yml (20260922T121911Z-fix-bump-setup-repositories-input-metada-1084) ([#182](https://github.com/damien-robotsix/robotsix-github-workflows/issues/182)) ([b856872](https://github.com/damien-robotsix/robotsix-github-workflows/commit/b8568722fa33fba3196a0364609b4c8bbb065a83))
+
 ## [1.0.2](https://github.com/damien-robotsix/robotsix-github-workflows/compare/v1.0.1...v1.0.2) (2026-09-19)
 
 
