@@ -36,7 +36,8 @@ inputs:
     description: >
       Comma-separated list of repositories to scope the token to.
       When empty (default), the token is fleet-wide. Single-repo callers
-      pass `${{ github.repository }}` to restrict the token scope.
+      pass the calling repository name (e.g. `owner/repo`) to restrict
+      the token scope.
     required: false
     default: ""
   permission-contents:
