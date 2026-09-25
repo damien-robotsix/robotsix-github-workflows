@@ -97,7 +97,7 @@ jobs:
       contents: write       # push bump branch
       pull-requests: write  # gh pr create
     steps:
-      - uses: damien-robotsix/robotsix-github-workflows/.github/actions/bump-setup@fb907a46b00693a117ca6b975da6e7b0f8238491
+      - uses: damien-robotsix/robotsix-github-workflows/.github/actions/bump-setup@0584b087d3ae384050ef06723d3f4e6e06d523da
         id: bump-setup
         with:
           app-id: ${{ inputs.app-id }}
