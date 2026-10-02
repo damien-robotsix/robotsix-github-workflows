@@ -64,7 +64,7 @@ jobs:
       # are disabled here — they belong on the final (patched) image.
       - name: Build base image (push by digest, untagged)
         id: base
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7
         with:
           context: .
           file: ${{ inputs.dockerfile }}
@@ -99,7 +99,7 @@ jobs:
       # so it carries the patched packages (e.g. perl-base >= 5.40.1-6+deb13u1).
       - name: Build and push hardened image
         id: build
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7
         with:
           context: /tmp/harden
           file: /tmp/harden/Dockerfile
