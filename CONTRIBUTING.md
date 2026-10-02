@@ -31,6 +31,7 @@ The Python test suite covers:
 | `tests/test-check-local-action-refs.py` | `scripts/check_local_action_refs.py` |
 | `tests/test-config-ownership-check.py` | `scripts/config_ownership_check.py` |
 | `tests/test-lint-trigger-coverage.py` | `scripts/lint_trigger_coverage.py` |
+| `tests/test-render-harden-dockerfile.py` | `scripts/render_harden_dockerfile.py` |
 
 The shell test suite covers:
 
