@@ -90,16 +90,10 @@ jobs:
         run: |
           python3 -m pip install --quiet pytest pyyaml
       - name: Run pytest suite
-        # The test files use hyphenated names (test-*.py), which pytest's
-        # default `test_*.py` discovery does NOT match — a bare `pytest
-        # tests/` would collect 0 tests and exit 5. List the suites
-        # explicitly (same list as the Makefile `pytest` target).
+        # pytest discovery is configured in pyproject.toml
+        # ([tool.pytest.ini_options]: python_files = test-*.py,
+        # --import-mode=importlib), so a bare invocation finds every
+        # tests/test-*.py suite automatically — no manual file list to
+        # keep in sync with the Makefile.
         run: |
-          python3 -m pytest \
-            tests/test-pin-bump.py \
-            tests/test-lint-sarif-permissions.py \
-            tests/test-check-local-action-refs.py \
-            tests/test-lint-trigger-coverage.py \
-            tests/test-config-ownership-check.py \
-            tests/test-render-harden-dockerfile.py \
-            -v
+          python3 -m pytest -v
