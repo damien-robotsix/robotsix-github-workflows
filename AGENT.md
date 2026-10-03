@@ -69,10 +69,11 @@ fragments or use towncrier.
 
 ## Testing conventions
 
-### Invoke pytest with an explicit file list, never bare `pytest tests/`
+### Use bare `pytest` or `pytest tests/` to invoke test suites
 
-This repo's unit-test files use hyphenated names (`tests/test-*.py`), not
-pytest's default `test_*.py`.  Always invoke pytest with the explicit file
-list (as in the `Makefile` `pytest` target and `.github/workflows/ci.yml`),
-never bare `pytest tests/` — pytest collects 0 tests from `test-*.py` and
-exits 5, silently producing a gate that runs nothing.
+Pytest is configured in `pyproject.toml` to auto-discover all
+`tests/test-*.py` files using importlib import mode.  The
+`[tool.pytest.ini_options]` block sets `testpaths = ["tests"]`,
+`python_files = ["test-*.py"]`, and `addopts = "--import-mode=importlib"`,
+so bare `pytest` (or `pytest tests/`) collects every suite — no manual
+file-list maintenance in the `Makefile` or CI workflows is required.
