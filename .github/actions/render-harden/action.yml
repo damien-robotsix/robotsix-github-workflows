@@ -1,0 +1,46 @@
+name: Render hardening Dockerfile
+description: >
+  Render the fleet-wide security-hardening wrapper Dockerfile (apt security
+  upgrade layer) for a base image, using this repository's
+  `scripts/render_harden_dockerfile.py`. Composite action so that the
+  shared `docker-release.yml` / `docker-pr-scan.yml` workflows can run the
+  script from THIS repo's checkout: a reusable workflow's `run:` steps
+  execute in the CALLER's workspace, where the script does not exist
+  (robotsix-memory / robotsix-file-hub `Publish Docker image` failed with
+  `can't open file '…/scripts/render_harden_dockerfile.py'` on 2026-10-02
+  after picking up the hardening pin).
+
+inputs:
+  base-ref:
+    description: Image reference the hardening layer builds FROM (tag or @digest).
+    required: true
+  config:
+    description: Path to the base image's JSON config (docker inspect / imagetools inspect output).
+    required: true
+  out:
+    description: Path of the rendered Dockerfile to write.
+    required: false
+    default: /tmp/harden/Dockerfile
+
+outputs:
+  dockerfile:
+    description: Path of the rendered Dockerfile.
+    value: ${{ inputs.out }}
+
+runs:
+  using: composite
+  steps:
+    - name: Render hardening Dockerfile
+      shell: bash
+      env:
+        BASE_REF: ${{ inputs.base-ref }}
+        CONFIG: ${{ inputs.config }}
+        OUT: ${{ inputs.out }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        mkdir -p "$(dirname "$OUT")"
+        python3 "$ACTION_PATH/../../../scripts/render_harden_dockerfile.py" \
+          --base-ref "$BASE_REF" \
+          --config "$CONFIG" \
+          --out "$OUT"
+        cat "$OUT"
