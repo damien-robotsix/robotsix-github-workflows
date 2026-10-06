@@ -73,16 +73,14 @@ jobs:
         run: |
           docker inspect --format '{{json .Config}}' "$BASE_TAG" > /tmp/base-config.json
 
+      # The render script lives in THIS repo, not the caller's checkout where a
+      # reusable workflow's `run:` steps execute — hence a composite action.
       - name: Render hardening Dockerfile
-        env:
-          BASE_TAG: ${{ steps.image-ref.outputs.base-image }}
-        run: |
-          mkdir -p /tmp/harden
-          python3 scripts/render_harden_dockerfile.py \
-            --base-ref "$BASE_TAG" \
-            --config /tmp/base-config.json \
-            --out /tmp/harden/Dockerfile
-          cat /tmp/harden/Dockerfile
+        uses: damien-robotsix/robotsix-github-workflows/.github/actions/render-harden@601fed52b4c4aac803970886c63e4a61ad474fe9
+        with:
+          base-ref: ${{ steps.image-ref.outputs.base-image }}
+          config: /tmp/base-config.json
+          out: /tmp/harden/Dockerfile
 
       # Stage 2: layer the apt security upgrade on top and load the result as
       # the image the Trivy gate scans, so the scan reflects the patched
