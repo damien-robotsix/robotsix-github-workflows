@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.4](https://github.com/damien-robotsix/robotsix-github-workflows/compare/v1.0.3...v1.0.4) (2026-10-06)
+
+
+### Bug Fixes
+
+* **docker:** render the hardening Dockerfile through a render-harden composite action ([#202](https://github.com/damien-robotsix/robotsix-github-workflows/issues/202)) ([c4caf23](https://github.com/damien-robotsix/robotsix-github-workflows/commit/c4caf23ade98668434145f5b1abd3bc42cec63e7))
+
 ## [1.0.3](https://github.com/damien-robotsix/robotsix-github-workflows/compare/v1.0.2...v1.0.3) (2026-09-22)
 
 
