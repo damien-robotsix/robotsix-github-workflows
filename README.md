@@ -37,6 +37,8 @@ Mill-domain checks (e.g. `check_kind_literals`) live in robotsix-mill's own CI, 
 - [Workflow Reference](docs/workflow-reference.md) — consolidated input, default, and secret reference
   for all 17 reusable workflows.
 - [Branch Protection](docs/branch-protection.md) — ruleset semantics, usage, and required `gh` auth scopes.
+- [Workflow Authoring](docs/WORKFLOW-AUTHORING.md) — conventions for authoring new reusable workflows:
+  structure, input design and validation, error reporting, and the pre-commit checklist.
 
 ## `auto-release.yml` — caller template
 
