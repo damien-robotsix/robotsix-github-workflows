@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.5](https://github.com/damien-robotsix/robotsix-github-workflows/compare/v1.0.4...v1.0.5) (2026-10-13)
+
+
+### Bug Fixes
+
+* **bump:** scope the App token to the calling repo's NAME, not owner/repo ([#209](https://github.com/damien-robotsix/robotsix-github-workflows/issues/209)) ([81726d2](https://github.com/damien-robotsix/robotsix-github-workflows/commit/81726d2956d523951cf4eda71ca5c1148467ba78))
+
 ## [1.0.4](https://github.com/damien-robotsix/robotsix-github-workflows/compare/v1.0.3...v1.0.4) (2026-10-06)
 
 
