@@ -17,6 +17,23 @@ on:
         required: false
         type: string
         default: ""
+      smoke:
+        description: >
+          Whether to run the post-build smoke test that executes the built
+          image once to prove its entrypoint can `exec`. Set to `false` to
+          skip for repos whose image legitimately cannot be run in CI.
+        required: false
+        type: boolean
+        default: true
+      smoke_command:
+        description: >
+          Command run inside the built image to smoke-test it, via `sh -c`
+          (e.g. `python -c "import mypkg"`). When empty (the default), the
+          test execs the image's own entrypoint/CMD binary with `--help`,
+          deriving it from the image config.
+        required: false
+        type: string
+        default: ""
 
 permissions: {}
 
@@ -114,6 +131,21 @@ jobs:
         env:
           TAGS: ${{ steps.meta.outputs.tags }}
         run: echo "image=$(echo "$TAGS" | head -1)" >> "$GITHUB_OUTPUT"
+
+      # Smoke test: execute the freshly published image once so an image that
+      # builds and scans green but cannot `exec` at runtime (e.g. a dangling
+      # venv python symlink after a requires-python bump) fails the job here
+      # instead of crash-looping after deployment. Nothing else in this
+      # pipeline runs the image. The composite action runs
+      # scripts/smoke_image.py from THIS repo's checkout; the base image
+      # config supplies the Entrypoint/CMD the default --help probe derives.
+      - name: Smoke-test image
+        if: ${{ inputs.smoke }}
+        uses: damien-robotsix/robotsix-github-workflows/.github/actions/docker-smoke@22e105fb6a2aab771e25996b1b18fc5c3cd4dd17
+        with:
+          image: ${{ steps.scan-ref.outputs.image }}
+          config: /tmp/base-config.json
+          command: ${{ inputs.smoke_command }}
 
       # Gate: only CRITICAL, fixable CVEs block the pipeline. Runs in
       # table format so the failing CVE row is visible in the CI log

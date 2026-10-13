@@ -1,0 +1,48 @@
+name: Docker image smoke test
+description: >
+  Execute a freshly built image once to prove its entrypoint can actually
+  start, catching the class of bug where the image builds, scans green, but
+  cannot `exec` at runtime (e.g. a dangling venv python symlink after a
+  requires-python bump: `exec /app/.venv/bin/uvicorn: no such file or
+  directory`). Nothing else in the Docker build / scan / harden pipeline
+  runs the image, so this is the only guard against shipping an unbootable
+  image. Composite action so the shared `docker-release.yml` /
+  `docker-pr-scan.yml` workflows can run this repository's
+  `scripts/smoke_image.py`: a reusable workflow's `run:` steps execute in the
+  CALLER's workspace, where the script does not exist.
+
+inputs:
+  image:
+    description: Image reference to smoke-test (tag or name@digest).
+    required: true
+  config:
+    description: >
+      Path to the image's JSON config (docker inspect `.Config` or
+      `docker buildx imagetools inspect` `.Image` output). Used to derive the
+      default `--help` probe from the image's Entrypoint/CMD when no explicit
+      command is given.
+    required: false
+    default: ""
+  command:
+    description: >
+      Optional smoke command run inside the container via `sh -c` (e.g.
+      `python -c "import mypkg"`). When empty, the default probe execs the
+      image's own entrypoint binary with `--help`.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Smoke-test image
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        CONFIG: ${{ inputs.config }}
+        COMMAND: ${{ inputs.command }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        python3 "$ACTION_PATH/../../../scripts/smoke_image.py" \
+          --image "$IMAGE" \
+          --config "$CONFIG" \
+          --command "$COMMAND"
