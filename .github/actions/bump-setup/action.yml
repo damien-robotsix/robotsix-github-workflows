@@ -36,7 +36,9 @@ inputs:
     description: >
       Comma-separated list of repositories to scope the token to.
       When empty (default), the token is fleet-wide. Single-repo callers
-      pass the calling repository name (e.g. `owner/repo`) to restrict
+      pass the calling repository NAME only (e.g. `repo`, never
+      `owner/repo`: create-github-app-token prepends the owner itself and
+      `owner/owner/repo` 404s on the installation lookup) to restrict
       the token scope.
     required: false
     default: ""
