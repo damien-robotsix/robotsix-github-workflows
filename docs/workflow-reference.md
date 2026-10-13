@@ -90,6 +90,8 @@ No inputs.  No secrets.
 | `dockerfile` | string | `./Dockerfile` | Path to Dockerfile. |
 | `image-name` | string | `ghcr.io/<owner>/<repo>` | Image name for scanning. |
 | `use-gha-cache` | boolean | `true` | Use GHA layer cache. |
+| `smoke` | boolean | `true` | Run the post-build smoke test that executes the image once to prove its entrypoint can `exec`. |
+| `smoke_command` | string | `""` | Command run inside the image via `sh -c` (e.g. `python -c "import mypkg"`). When empty, execs the image's own entrypoint/CMD binary with `--help`. |
 
 No secrets (uses `GITHUB_TOKEN` via caller workflow).
 
@@ -105,6 +107,8 @@ skip the cache entirely.
 |---|---|---|---|
 | `dockerfile` | string | `./Dockerfile` | Path to Dockerfile. |
 | `image-name` | string | `ghcr.io/<owner>/<repo>` | Image name for publishing. |
+| `smoke` | boolean | `true` | Run the post-build smoke test that executes the image once to prove its entrypoint can `exec`. |
+| `smoke_command` | string | `""` | Command run inside the image via `sh -c` (e.g. `python -c "import mypkg"`). When empty, execs the image's own entrypoint/CMD binary with `--help`. |
 
 No explicit secrets input (callers pass `secrets: inherit`).
 
