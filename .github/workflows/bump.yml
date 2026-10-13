@@ -106,7 +106,7 @@ jobs:
           checkout-token: "true"
           checkout-repository: ${{ inputs.bump-mode == 'pins' && 'damien-robotsix/robotsix-github-workflows' || '' }}
           checkout-path: ${{ inputs.bump-mode == 'pins' && '_workflow-lib' || '' }}
-          repositories: ${{ github.repository }}
+          repositories: ${{ github.event.repository.name }}
           permission-contents: ${{ inputs.permission-contents }}
           permission-pull-requests: ${{ inputs.permission-pull-requests }}
 
