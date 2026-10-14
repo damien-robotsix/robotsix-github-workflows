@@ -124,6 +124,26 @@ jobs:
           provenance: mode=max
           sbom: true
 
+      # Fail-closed check on the hardening layer's security property: the
+      # published image must run as the SAME user as the Stage-1 base. The
+      # hardening layer runs apt as root then restores the original USER; a
+      # parsing regression that dropped the restore line would otherwise leave
+      # the image as root with a green build and a green Trivy gate. Assert the
+      # OUTCOME here (not just trust the render-time parse) so the whole class
+      # of regressions fails loud.
+      - name: Inspect hardened image config
+        env:
+          HARDENED_REF: ${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+        run: |
+          docker buildx imagetools inspect "$HARDENED_REF" \
+            --format '{{json .Image}}' > /tmp/hardened-config.json
+
+      - name: Assert hardened image user matches base
+        uses: damien-robotsix/robotsix-github-workflows/.github/actions/assert-image-user@a123d5f5386a32d171ef189b6d2a58bab5c7708f
+        with:
+          base-config: /tmp/base-config.json
+          hardened-config: /tmp/hardened-config.json
+
       - name: Resolve scan image tag
         id: scan-ref
         # Pass the metadata-action output via env, not inline ``${{ }}``
