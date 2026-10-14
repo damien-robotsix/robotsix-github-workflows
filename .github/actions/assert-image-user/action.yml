@@ -1,0 +1,32 @@
+name: Assert image user
+description: >
+  Assert the published (hardened) image runs as the same `USER` as its base
+  image, using this repository's `scripts/assert_image_user.py`. Fail-closed
+  check so a parsing regression that dropped the `USER`-restore line in the
+  hardening layer cannot silently publish a root image with a green build and
+  a green Trivy gate. Composite action so the shared `docker-release.yml`
+  workflow can run the script from THIS repo's checkout: a reusable workflow's
+  `run:` steps execute in the CALLER's workspace, where the script does not
+  exist.
+
+inputs:
+  base-config:
+    description: Path to the base image's JSON config (imagetools inspect .Image output).
+    required: true
+  hardened-config:
+    description: Path to the hardened image's JSON config (imagetools inspect .Image output).
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Assert hardened image user matches base
+      shell: bash
+      env:
+        BASE_CONFIG: ${{ inputs.base-config }}
+        HARDENED_CONFIG: ${{ inputs.hardened-config }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        python3 "$ACTION_PATH/../../../scripts/assert_image_user.py" \
+          --base-config "$BASE_CONFIG" \
+          --hardened-config "$HARDENED_CONFIG"

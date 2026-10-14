@@ -38,14 +38,15 @@ class TestExtractUser:
         assert extract_user({"User": ""}) == ""
         assert extract_user({"config": {"User": ""}}) == ""
 
-    def test_missing_user(self) -> None:
-        assert extract_user({"config": {}}) == ""
-        assert extract_user({"Entrypoint": ["/bin/x"]}) == ""
+    def test_missing_user_is_unknown(self) -> None:
+        # No ``User`` key anywhere => undeterminable, NOT a silent root default.
+        assert extract_user({"config": {}}) is None
+        assert extract_user({"Entrypoint": ["/bin/x"]}) is None
 
-    def test_none_and_wrong_type(self) -> None:
-        assert extract_user(None) == ""
-        assert extract_user("nonsense") == ""
-        assert extract_user(["a", "b"]) == ""
+    def test_none_and_wrong_type_are_unknown(self) -> None:
+        assert extract_user(None) is None
+        assert extract_user("nonsense") is None
+        assert extract_user(["a", "b"]) is None
 
     def test_platform_map_prefers_amd64(self) -> None:
         cfg = {
@@ -129,19 +130,79 @@ class TestMain:
         assert "FROM ghcr.io/o/r@sha256:deadbeef" in text
         assert text.rstrip().endswith("USER svc")
 
-    def test_malformed_config_defaults_to_root(self, tmp_path: Path) -> None:
+    def test_non_root_base_restores_user(self, tmp_path: Path) -> None:
+        # A base that genuinely runs as a non-root user => USER line emitted.
+        cfg = tmp_path / "config.json"
+        cfg.write_text(json.dumps({"config": {"User": "app"}}))
+        out = tmp_path / "Dockerfile"
+        rc = main(
+            ["--base-ref", "base:tag", "--config", str(cfg), "--out", str(out)]
+        )
+        assert rc == 0
+        assert out.read_text().rstrip().endswith("USER app")
+
+    def test_genuine_root_base_has_no_restore_line(self, tmp_path: Path) -> None:
+        # ``User`` present but root => no restore line, and NO failure.
+        cfg = tmp_path / "config.json"
+        cfg.write_text(json.dumps({"config": {"User": "root"}}))
+        out = tmp_path / "Dockerfile"
+        rc = main(
+            ["--base-ref", "base:tag", "--config", str(cfg), "--out", str(out)]
+        )
+        assert rc == 0
+        assert out.read_text().count("USER ") == 1  # only the hardening root
+
+    def test_unparseable_config_fails_loud(self, tmp_path: Path, capsys) -> None:
         cfg = tmp_path / "config.json"
         cfg.write_text("{not valid json")
         out = tmp_path / "Dockerfile"
         rc = main(
             ["--base-ref", "base:tag", "--config", str(cfg), "--out", str(out)]
         )
-        assert rc == 0
-        text = out.read_text()
-        assert text.count("USER ") == 1  # stays root, no restore line
+        assert rc != 0  # no silent rootful Dockerfile
+        assert not out.exists()
+        assert "could not determine" in capsys.readouterr().err
 
-    def test_missing_config_is_ok(self, tmp_path: Path, capsys) -> None:
-        rc = main(["--base-ref", "base:tag"])
+    def test_empty_config_fails_loud(self, tmp_path: Path, capsys) -> None:
+        cfg = tmp_path / "config.json"
+        cfg.write_text("   ")
+        out = tmp_path / "Dockerfile"
+        rc = main(
+            ["--base-ref", "base:tag", "--config", str(cfg), "--out", str(out)]
+        )
+        assert rc != 0
+        assert not out.exists()
+
+    def test_config_without_user_fails_loud(self, tmp_path: Path) -> None:
+        cfg = tmp_path / "config.json"
+        cfg.write_text(json.dumps({"config": {"Entrypoint": ["/bin/x"]}}))
+        out = tmp_path / "Dockerfile"
+        rc = main(
+            ["--base-ref", "base:tag", "--config", str(cfg), "--out", str(out)]
+        )
+        assert rc != 0
+        assert not out.exists()
+
+    def test_missing_config_fails_loud(self) -> None:
+        # No --config at all is "user unknown" too: fail rather than root.
+        assert main(["--base-ref", "base:tag"]) != 0
+
+    def test_allow_unknown_user_opts_in_to_root(
+        self, tmp_path: Path
+    ) -> None:
+        cfg = tmp_path / "config.json"
+        cfg.write_text("{not valid json")
+        out = tmp_path / "Dockerfile"
+        rc = main(
+            [
+                "--base-ref",
+                "base:tag",
+                "--config",
+                str(cfg),
+                "--out",
+                str(out),
+                "--allow-unknown-user",
+            ]
+        )
         assert rc == 0
-        captured = capsys.readouterr()
-        assert "FROM base:tag" in captured.out
+        assert out.read_text().count("USER ") == 1  # explicit root opt-in

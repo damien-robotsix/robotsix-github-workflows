@@ -48,8 +48,8 @@ _APT_RUN = (
 )
 
 
-def extract_user(config: Any) -> str:
-    """Return the ``User`` configured on an image, or ``""`` when root/unset.
+def extract_user(config: Any) -> str | None:
+    """Return the ``User`` configured on an image, or ``None`` when unknown.
 
     Tolerant of the several JSON shapes the workflow may feed in:
 
@@ -59,11 +59,20 @@ def extract_user(config: Any) -> str:
     * a per-platform map ``{"linux/amd64": {"config": {...}}, ...}`` (an
       image index / manifest list).
 
-    Anything unrecognised (``None``, wrong type, missing key) yields ``""`` so
-    the caller keeps the image running as root — a safe, build-passing default.
+    The return value distinguishes two outcomes the caller MUST treat
+    differently:
+
+    * a ``str`` — a ``User`` key was located in a recognised shape.  The
+      string is ``""`` when the base genuinely runs as root (``User`` present
+      but empty / ``root`` / ``0``, normalised here only by stripping), or the
+      configured user otherwise.
+    * ``None`` — the user could NOT be determined (non-dict, missing ``User``
+      key, unrecognised shape).  This is a hard failure: silently defaulting
+      to root would turn a parsing regression into a privilege escalation, so
+      the caller must fail loud rather than emit a rootful Dockerfile.
     """
     if not isinstance(config, dict):
-        return ""
+        return None
     # OCI image config: the User lives under a nested "config" object.
     nested = config.get("config")
     if isinstance(nested, dict) and "User" in nested:
@@ -78,9 +87,9 @@ def extract_user(config: Any) -> str:
         value = config.get(key)
         if isinstance(value, dict):
             user = extract_user(value)
-            if user:
+            if user is not None:
                 return user
-    return ""
+    return None
 
 
 def render(base_ref: str, user: str = "", *, apt: bool = True) -> str:
@@ -122,8 +131,9 @@ def _load_config(path: str | None) -> Any:
     try:
         return json.loads(text)
     except json.JSONDecodeError:
-        # A malformed / empty inspect output must not break publishing; fall
-        # back to running as root (no USER restore line).
+        # A malformed inspect output yields ``None`` here; ``extract_user``
+        # maps that to "user unknown" and ``main`` fails loud rather than
+        # silently publishing a rootful image.
         return None
 
 
@@ -150,9 +160,30 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Omit the apt-get upgrade layer (dry run / testing).",
     )
+    parser.add_argument(
+        "--allow-unknown-user",
+        action="store_true",
+        help="When the base image's USER cannot be determined from --config, "
+        "proceed anyway and leave the image running as root. Without this "
+        "flag an undeterminable user is a hard error, so a parsing "
+        "regression cannot silently publish a privilege-escalated image.",
+    )
     args = parser.parse_args(argv)
 
     user = extract_user(_load_config(args.config))
+    if user is None:
+        if not args.allow_unknown_user:
+            print(
+                "error: could not determine the base image's USER from "
+                f"--config ({args.config!r}); refusing to render a Dockerfile "
+                "that would silently publish the image as root. Fix the "
+                "inspect output, or pass --allow-unknown-user to opt in to a "
+                "rootful image.",
+                file=sys.stderr,
+            )
+            return 2
+        # Explicit opt-in: treat an unknown user as root (no USER restore).
+        user = ""
     dockerfile = render(args.base_ref, user, apt=not args.no_apt)
 
     if args.out:
