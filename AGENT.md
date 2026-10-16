@@ -52,8 +52,8 @@ cannot drift from it.
 
 ### Rule 7 — Composite actions live under `.github/actions/<name>/action.yml` with a snake_case directory name
 
-Two composite actions now exist in this repo (`python-setup`,
-`trivy-sarif`), each extracting duplicated workflow logic.  New composite
+The composite actions under `.github/actions/` each extract duplicated
+workflow logic.  New composite
 actions must follow the same conventions: a single `action.yml` at the root
 of the directory, commit-SHA-pinned `uses:` lines (Rule 1 applies), and
 `persist-credentials: false` on any `actions/checkout` step (Rule 3 applies).
