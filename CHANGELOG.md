@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.6](https://github.com/damien-robotsix/robotsix-github-workflows/compare/v1.0.5...v1.0.6) (2026-10-20)
+
+
+### Bug Fixes
+
+* **auto-merge:** poll PR checks before gh pr merge --auto ([#218](https://github.com/damien-robotsix/robotsix-github-workflows/issues/218)) ([6864c0e](https://github.com/damien-robotsix/robotsix-github-workflows/commit/6864c0e182134fde48fec1b7785e970f7eaa8d1c))
+
 ## [1.0.5](https://github.com/damien-robotsix/robotsix-github-workflows/compare/v1.0.4...v1.0.5) (2026-10-13)
 
 
