@@ -97,23 +97,45 @@ jobs:
         run: |
           echo "Bot: $GITHUB_ACTOR${UPDATE_TYPE:+ | update-type: $UPDATE_TYPE}"
 
+          # Poll the PR's checks BEFORE touching `--auto`. On a repo whose
+          # branch protection requires no checks (every fleet repo since they
+          # went public — "Branch not protected"), `gh pr merge --auto`
+          # does not queue: GitHub merges immediately, red checks included.
+          # 2026-10-20: robotsix-invest #377/#379/#380 merged with their
+          # Quality gate failing on a fresh advisory, and because the merge
+          # ran on GITHUB_TOKEN the merge commits fired no CI on main either,
+          # so nothing ever reported the red. Watching first makes `--auto`
+          # a no-op shortcut rather than a bypass; a PR with no checks at
+          # all (a repo without CI) still merges.
+          set +e
+          gh pr checks "$PR_URL" --watch --fail-fast
+          checks_rc=$?
+          set -e
+          if [ "$checks_rc" -ne 0 ]; then
+            if gh pr checks "$PR_URL" 2>&1 | grep -qi "no checks reported"; then
+              echo "No checks on this PR — nothing to wait for"
+            else
+              echo "::error::checks failed or are still pending — not merging"
+              exit "$checks_rc"
+            fi
+          fi
+
           set +e
           output=$(gh pr merge --auto --squash --delete-branch "$PR_URL" 2>&1)
           rc=$?
           set -e
 
           if [ "$rc" -eq 0 ]; then
-            echo "Auto-merge queued (protected repo — will merge when checks pass)"
+            echo "Auto-merge queued or applied (checks already green)"
           # Two ways `--auto` is unavailable and we must merge ourselves:
           #  - no branch protection, so there is nothing to queue behind;
           #  - the repo has "Allow auto-merge" off. GitHub refuses to enable it
           #    on PRIVATE repos on this plan, so PATCHing allow_auto_merge=true
           #    silently stays false there (robotsix-invest, robotsix-website,
-          #    hexarchy). Both cases still poll checks before merging, so this
-          #    never merges a red PR.
+          #    hexarchy). The checks were polled above, so this never merges
+          #    a red PR.
           elif echo "$output" | grep -qiE "protected branch rules not configured|not allowed for this repository|auto[- ]merge is not allowed|enablePullRequestAutoMerge"; then
-            echo "Auto-merge unavailable here — polling checks then merging directly"
-            gh pr checks "$PR_URL" --watch --fail-fast
+            echo "Auto-merge unavailable here — merging directly (checks polled above)"
             gh pr merge --squash --delete-branch "$PR_URL"
           else
             printf '%s\n' "$output" >&2
