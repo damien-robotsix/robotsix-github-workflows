@@ -66,16 +66,23 @@ def extract_user(config: Any) -> str | None:
       string is ``""`` when the base genuinely runs as root (``User`` present
       but empty / ``root`` / ``0``, normalised here only by stripping), or the
       configured user otherwise.
-    * ``None`` — the user could NOT be determined (non-dict, missing ``User``
-      key, unrecognised shape).  This is a hard failure: silently defaulting
+    * ``None`` — the user could NOT be determined (non-dict, a top-level
+      ``docker inspect`` shape without ``User``, unrecognised shape). An OCI
+      ``config`` object without ``User`` is NOT this case: the key is optional
+      in the spec and BuildKit omits it for root images, so it returns ``""``.  This is a hard failure: silently defaulting
       to root would turn a parsing regression into a privilege escalation, so
       the caller must fail loud rather than emit a rootful Dockerfile.
     """
     if not isinstance(config, dict):
         return None
-    # OCI image config: the User lives under a nested "config" object.
+    # OCI image config: the User lives under a nested "config" object. The
+    # OCI spec makes ``User`` OPTIONAL and BuildKit omits the key entirely for
+    # an image that never ran ``USER`` (observed 2026-10-21 on
+    # robotsix-mill: config keys were Entrypoint/Env/ExposedPorts/WorkingDir
+    # only), so a recognised ``config`` object WITHOUT the key is a genuine
+    # root image, not an undeterminable one — return ``""``.
     nested = config.get("config")
-    if isinstance(nested, dict) and "User" in nested:
+    if isinstance(nested, dict):
         return str(nested.get("User") or "").strip()
     # docker inspect .Config: User at the top level.
     if "User" in config:

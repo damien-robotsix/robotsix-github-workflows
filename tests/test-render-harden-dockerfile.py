@@ -40,7 +40,25 @@ class TestExtractUser:
 
     def test_missing_user_is_unknown(self) -> None:
         # No ``User`` key anywhere => undeterminable, NOT a silent root default.
-        assert extract_user({"config": {}}) is None
+        # OCI config without the optional User key = root (BuildKit omits it).
+        assert extract_user({"config": {}}) == ""
+        assert (
+            extract_user(
+                {
+                    "created": "2026-10-21T12:50:00Z",
+                    "architecture": "amd64",
+                    "os": "linux",
+                    "config": {
+                        "Entrypoint": ["/usr/bin/tini", "-s", "--", "/app/entrypoint.sh"],
+                        "Env": ["PATH=/usr/local/bin"],
+                        "ExposedPorts": {"8077/tcp": {}},
+                        "WorkingDir": "/app",
+                    },
+                    "rootfs": {"type": "layers", "diff_ids": []},
+                }
+            )
+            == ""
+        )
         assert extract_user({"Entrypoint": ["/bin/x"]}) is None
 
     def test_none_and_wrong_type_are_unknown(self) -> None:
@@ -174,8 +192,11 @@ class TestMain:
         assert not out.exists()
 
     def test_config_without_user_fails_loud(self, tmp_path: Path) -> None:
+        # A docker-inspect (top-level) shape with no User is undeterminable;
+        # an OCI ``config`` object without User is root, see
+        # TestExtractUser.test_missing_user_is_unknown.
         cfg = tmp_path / "config.json"
-        cfg.write_text(json.dumps({"config": {"Entrypoint": ["/bin/x"]}}))
+        cfg.write_text(json.dumps({"Entrypoint": ["/bin/x"]}))
         out = tmp_path / "Dockerfile"
         rc = main(
             ["--base-ref", "base:tag", "--config", str(cfg), "--out", str(out)]
