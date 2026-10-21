@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.7](https://github.com/damien-robotsix/robotsix-github-workflows/compare/v1.0.6...v1.0.7) (2026-10-21)
+
+
+### Bug Fixes
+
+* **docker-release:** move the assert-image-user pin onto the root-user fix ([#225](https://github.com/damien-robotsix/robotsix-github-workflows/issues/225)) ([13e54ef](https://github.com/damien-robotsix/robotsix-github-workflows/commit/13e54ef2c331bfb3eb6daac295f49ff310b3d572))
+* **docker-release:** pin assert-image-user to a ref that contains the action ([#220](https://github.com/damien-robotsix/robotsix-github-workflows/issues/220)) ([2a9067e](https://github.com/damien-robotsix/robotsix-github-workflows/commit/2a9067ec707cb8bdeced67cdba0aecd8ccdef94a))
+* **docker:** pin docker-smoke to a ref that contains the action ([#222](https://github.com/damien-robotsix/robotsix-github-workflows/issues/222)) ([863acf2](https://github.com/damien-robotsix/robotsix-github-workflows/commit/863acf24c9463f88ecf6f7f9bb1e478624a42d84))
+* **harden:** treat an OCI config without a User key as root, not unknown ([#223](https://github.com/damien-robotsix/robotsix-github-workflows/issues/223)) ([c4f6352](https://github.com/damien-robotsix/robotsix-github-workflows/commit/c4f63528d93456e4497b4af60023956cd803abc4))
+
 ## [1.0.6](https://github.com/damien-robotsix/robotsix-github-workflows/compare/v1.0.5...v1.0.6) (2026-10-20)
 
 
