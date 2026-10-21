@@ -89,7 +89,7 @@ class TestMain:
 
     def test_unknown_hardened_user_fails(self, tmp_path: Path) -> None:
         base = _write(tmp_path / "base.json", {"config": {"User": "app"}})
-        hardened = _write(tmp_path / "hard.json", {"config": {}})
+        hardened = _write(tmp_path / "hard.json", {"Entrypoint": ["/bin/x"]})
         rc = main(
             ["--base-config", str(base), "--hardened-config", str(hardened)]
         )
