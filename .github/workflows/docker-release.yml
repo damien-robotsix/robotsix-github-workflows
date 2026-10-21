@@ -161,7 +161,7 @@ jobs:
       # config supplies the Entrypoint/CMD the default --help probe derives.
       - name: Smoke-test image
         if: ${{ inputs.smoke }}
-        uses: damien-robotsix/robotsix-github-workflows/.github/actions/docker-smoke@22e105fb6a2aab771e25996b1b18fc5c3cd4dd17
+        uses: damien-robotsix/robotsix-github-workflows/.github/actions/docker-smoke@3ef16cd77ef938725fac99400d70027de5e5a6b0
         with:
           image: ${{ steps.scan-ref.outputs.image }}
           config: /tmp/base-config.json
