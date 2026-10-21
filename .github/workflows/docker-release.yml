@@ -139,7 +139,7 @@ jobs:
             --format '{{json .Image}}' > /tmp/hardened-config.json
 
       - name: Assert hardened image user matches base
-        uses: damien-robotsix/robotsix-github-workflows/.github/actions/assert-image-user@a123d5f5386a32d171ef189b6d2a58bab5c7708f
+        uses: damien-robotsix/robotsix-github-workflows/.github/actions/assert-image-user@2dad95d099e1558dffe08812ca81d83a5746842c
         with:
           base-config: /tmp/base-config.json
           hardened-config: /tmp/hardened-config.json
