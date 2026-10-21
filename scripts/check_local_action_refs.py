@@ -26,13 +26,12 @@ from __future__ import annotations
 import argparse
 import glob
 import os
+import subprocess
 import sys
 
 try:
     import yaml
 except ImportError:
-    import subprocess
-
     subprocess.check_call([sys.executable, "-m", "pip", "install", "--quiet", "pyyaml"])
     import yaml
 
@@ -70,6 +69,42 @@ def _action_file_exists(actions_dir: str, name: str) -> bool:
     )
 
 
+def _iter_action_refs(doc: object, own_repo_prefix: str):
+    """Yield ``(name, sha)`` for every local/own-repo action ref in a doc.
+
+    ``sha`` is ``None`` for relative ``./.github/actions/<name>`` refs and
+    the pinned 40-char commit sha for own-repo absolute
+    ``<owner>/<repo>/.github/actions/<name>@<sha>`` refs (``None`` when the
+    absolute ref carries no ``@<sha>`` suffix).
+    """
+    if not isinstance(doc, dict):
+        return
+
+    jobs = doc.get("jobs")
+    if not isinstance(jobs, dict):
+        return
+
+    for job in jobs.values():
+        if not isinstance(job, dict):
+            continue
+        steps = job.get("steps")
+        if not isinstance(steps, list):
+            continue
+        for step in steps:
+            if not isinstance(step, dict):
+                continue
+            uses = step.get("uses")
+            if not isinstance(uses, str):
+                continue
+            if uses.startswith(_LOCAL_ACTION_PREFIX):
+                yield uses[len(_LOCAL_ACTION_PREFIX) :], None
+            elif uses.startswith(own_repo_prefix):
+                # Strip prefix and split the optional @<sha> suffix.
+                rest = uses[len(own_repo_prefix) :]
+                name, _, sha = rest.partition("@")
+                yield name, (sha or None)
+
+
 def _collect_local_refs_from_doc(
     doc: object, own_repo_prefix: str | None = None
 ) -> list[str]:
@@ -86,42 +121,70 @@ def _collect_local_refs_from_doc(
     if own_repo_prefix is None:
         own_repo_prefix = _own_repo_action_prefix()
 
-    refs: list[str] = []
-    if not isinstance(doc, dict):
-        return refs
+    return [name for name, _sha in _iter_action_refs(doc, own_repo_prefix)]
 
-    jobs = doc.get("jobs")
-    if not isinstance(jobs, dict):
-        return refs
 
-    for job in jobs.values():
-        if not isinstance(job, dict):
-            continue
-        steps = job.get("steps")
-        if not isinstance(steps, list):
-            continue
-        for step in steps:
-            if not isinstance(step, dict):
-                continue
-            uses = step.get("uses")
-            if not isinstance(uses, str):
-                continue
-            if uses.startswith(_LOCAL_ACTION_PREFIX):
-                name = uses[len(_LOCAL_ACTION_PREFIX) :]
-                refs.append(name)
-            elif uses.startswith(own_repo_prefix):
-                # Strip prefix and optional @<sha> suffix
-                rest = uses[len(own_repo_prefix) :]
-                name = rest.split("@", 1)[0]
-                refs.append(name)
+def _verify_action_at_sha(
+    name: str, sha: str, *, actions_dir_rel: str = ".github/actions", repo_root: str = "."
+) -> str | None:
+    """Verify the composite action ``name`` exists in git at ``sha``.
 
-    return refs
+    Reproduces the failure mode that a working-tree-only check misses: an
+    own-repo absolute ``uses:`` pinned to a sha that does *not* contain the
+    action's ``action.yml`` fails at ``Set up job`` for the first consumer
+    whose pin moves past it.  Checks ``git cat-file -e
+    <sha>:.github/actions/<name>/action.yml`` (falling back to
+    ``action.yaml``), fetching the sha first (``git fetch --depth=1 origin
+    <sha>``) when the checkout is shallow and the object is absent.
+
+    Returns ``None`` when the action file exists at the sha, or an error
+    string (naming the action and the sha) otherwise.
+    """
+
+    def _sha_present() -> bool:
+        return (
+            subprocess.run(
+                ["git", "cat-file", "-e", f"{sha}^{{commit}}"],
+                cwd=repo_root,
+                capture_output=True,
+            ).returncode
+            == 0
+        )
+
+    if not _sha_present():
+        fetched = subprocess.run(
+            ["git", "fetch", "--depth=1", "origin", sha],
+            cwd=repo_root,
+            capture_output=True,
+        )
+        if fetched.returncode != 0 or not _sha_present():
+            return f"action '{name}' pinned to sha {sha} which could not be fetched"
+
+    for filename in ("action.yml", "action.yaml"):
+        path = f"{actions_dir_rel}/{name}/{filename}"
+        if (
+            subprocess.run(
+                ["git", "cat-file", "-e", f"{sha}:{path}"],
+                cwd=repo_root,
+                capture_output=True,
+            ).returncode
+            == 0
+        ):
+            return None
+
+    return (
+        f"action '{name}' does not exist at sha {sha} "
+        f"({actions_dir_rel}/{name}/action.yml or action.yaml); the pinned "
+        f"sha must be one that contains the action"
+    )
 
 
 def check(
     *,
     workflow_dir: str = ".github/workflows",
     actions_dir: str = ".github/actions",
+    actions_dir_rel: str = ".github/actions",
+    repo_root: str = ".",
     check_orphans: bool = False,
 ) -> int:
     """Validate local composite-action references across all workflow files.
@@ -152,7 +215,7 @@ def check(
                 errors.append(f"{path}: invalid YAML — {exc}")
                 continue
 
-        for name in _collect_local_refs_from_doc(doc, own_repo_prefix):
+        for name, sha in _iter_action_refs(doc, own_repo_prefix):
             if not name or "/" in name:
                 errors.append(f"{path}: invalid local action reference '{name}'")
                 continue
@@ -164,6 +227,19 @@ def check(
                     f"{actions_dir}/{name}/action.yml (or action.yaml) "
                     f"does not exist"
                 )
+
+            # Own-repo absolute refs carry a pinned sha; the working-tree
+            # check above cannot catch a sha that predates the action
+            # (ghwf #211). Verify the action file exists AT THAT SHA.
+            if sha:
+                sha_error = _verify_action_at_sha(
+                    name,
+                    sha,
+                    actions_dir_rel=actions_dir_rel,
+                    repo_root=repo_root,
+                )
+                if sha_error is not None:
+                    errors.append(f"{path}: {sha_error}")
 
     if check_orphans and os.path.isdir(actions_dir):
         for entry in sorted(os.listdir(actions_dir)):
