@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/damien-robotsix/robotsix-github-workflows/compare/v1.0.7...v1.1.0) (2026-10-22)
+
+
+### Features
+
+* Add an OpenSSF Scorecard workflow for continuous supply-chain posture scoring (20261016T103954Z-add-an-openssf-scorecard-workflow-for-co-ee2d) ([#226](https://github.com/damien-robotsix/robotsix-github-workflows/issues/226)) ([8a1a134](https://github.com/damien-robotsix/robotsix-github-workflows/commit/8a1a1340e5f4848d8b0c825b118903b82b4d31fc))
+
 ## [1.0.7](https://github.com/damien-robotsix/robotsix-github-workflows/compare/v1.0.6...v1.0.7) (2026-10-21)
 
 
