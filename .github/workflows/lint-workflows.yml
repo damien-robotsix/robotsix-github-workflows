@@ -21,6 +21,15 @@ on:
         required: false
         type: string
         default: "codeql.yml scan-container.yml scorecard.yml"
+      dockerfiles:
+        description: >-
+          Space-separated list of Dockerfile paths (relative to the repository
+          root) whose FROM instructions must be pinned to an @sha256 digest,
+          e.g. "Dockerfile sandbox/Dockerfile". Empty (the default) skips the
+          check.
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -54,6 +63,35 @@ jobs:
 
       - name: Validate trigger coverage
         run: python3 _workflow-lib/scripts/lint_trigger_coverage.py
+
+  dockerfile-pins:
+    name: Dockerfile digest pins
+    if: ${{ inputs.dockerfiles != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          persist-credentials: false
+
+      # The lint script lives in THIS workflows repo, not the caller's
+      # checkout (see check-permissions above).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          repository: damien-robotsix/robotsix-github-workflows
+          ref: ${{ github.job_workflow_sha }}
+          path: _workflow-lib
+          persist-credentials: false
+
+      - name: Check FROM digest pins
+        env:
+          DOCKERFILES: ${{ inputs.dockerfiles }}
+        # Word-splitting of $DOCKERFILES is intentional (space-separated list).
+        run: |
+          set -f  # no glob expansion of the caller-supplied paths
+          # shellcheck disable=SC2086
+          python3 _workflow-lib/scripts/lint_dockerfile_pins.py $DOCKERFILES
 
   actionlint:
     name: Actionlint

@@ -119,8 +119,18 @@ No explicit secrets input (callers pass `secrets: inherit`).
 | `run-actionlint` | boolean | `false` | Run actionlint on workflow files. |
 | `run-zizmor` | boolean | `false` | Run zizmor security audit. |
 | `sarif-workflows` | string | `codeql.yml scan-container.yml scorecard.yml` | Workflow basenames requiring security-events:write. |
+| `dockerfiles` | string | `""` | Space-separated Dockerfile paths whose `FROM` lines must be digest-pinned (e.g. `Dockerfile sandbox/Dockerfile`). Empty skips the check. |
 
 No secrets.
+
+When `dockerfiles` is set, the `dockerfile-pins` job runs
+`scripts/lint_dockerfile_pins.py` (ported from robotsix-browser) on each
+listed file and fails on any `FROM` that lacks an `@sha256:<64-hex>` digest,
+e.g. `FROM node:22-alpine AS ui`. `FROM scratch` and references to an earlier
+build stage are exempt; `$ARG` references are expanded from `ARG` defaults
+declared before the first `FROM`, and an ARG with no default is reported
+because the linter cannot prove it is pinned. Pin a tag with
+`<image>:<tag>@sha256:<digest>`.
 
 ## `mutation-test.yml`
 
