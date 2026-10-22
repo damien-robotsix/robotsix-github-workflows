@@ -14,6 +14,18 @@ comment.  Floating tags can be force-pushed to a different (potentially
 malicious) commit.  SHA-pinning guarantees supply-chain integrity and
 reproducibility.
 
+Exemptions: local `./` refs (e.g. `uses: ./.github/workflows/baseline-check.yml`)
+need neither a SHA nor a comment.  Own-repo composite-action refs
+(`damien-robotsix/robotsix-github-workflows/.github/actions/<name>@<sha>`) must
+be SHA-pinned but carry **no** version comment, because composite actions in
+this repo are not version-tagged.
+
+Rules 1, 3 and 5 are enforced by `scripts/check_workflow_rules.py`, which runs
+as a blocking step in `ci.yml` and as the `check-workflow-rules` pre-commit hook
+(`make lint`).  For Rule 3 it honours a step-level
+`# zizmor: ignore[artipacked]` comment on checkouts that intentionally keep
+persisted credentials (e.g. a later push step needs the minted token).
+
 ### Rule 2 — No inline `${{ }}` in `run:` blocks
 
 Never interpolate `${{ }}` expressions directly inside `run:` shell blocks;
