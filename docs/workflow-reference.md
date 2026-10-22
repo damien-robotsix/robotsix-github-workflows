@@ -120,7 +120,7 @@ No explicit secrets input (callers pass `secrets: inherit`).
 |---|---|---|---|
 | `run-actionlint` | boolean | `false` | Run actionlint on workflow files. |
 | `run-zizmor` | boolean | `false` | Run zizmor security audit. |
-| `sarif-workflows` | string | `codeql.yml scan-container.yml` | Workflow basenames requiring security-events:write. |
+| `sarif-workflows` | string | `codeql.yml scan-container.yml scorecard.yml` | Workflow basenames requiring security-events:write. |
 
 No secrets.
 
@@ -275,6 +275,23 @@ environment directly via `uv run pip-audit`.
 
 An SBOM (CycloneDX JSON) is generated and uploaded as a build artifact on
 every run via `always()`, so it is available even when scans fail.
+
+## `scorecard.yml`
+
+No inputs.  No secrets (caller needs `security-events: write` and
+`contents: read`).
+
+Runs [OpenSSF Scorecard](https://github.com/ossf/scorecard-action) against
+the calling repository and uploads the SARIF results to Code Scanning
+(category `scorecard`).  Checks cover repository-level supply-chain posture:
+Token-Permissions, Branch-Protection, Dangerous-Workflow, Maintained,
+Pinned-Dependencies, Signed-Releases and more.
+
+Results are not published to the public Scorecard API
+(`publish_results: false`): Scorecard's publish verification inspects the
+calling workflow file and rejects reusable-workflow callers.  Repos that want
+the public badge add a standalone workflow — see
+`.github/workflows/self-scorecard.yml` in this repo for the reference shape.
 
 ## `scan-container.yml`
 

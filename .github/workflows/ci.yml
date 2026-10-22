@@ -81,6 +81,8 @@ jobs:
           python-version: "3.14"
       - name: Validate local action references
         run: python3 scripts/check_local_action_refs.py --check-orphans
+      - name: Enforce AGENT.md workflow rules (SHA pins, static defaults, persist-credentials)
+        run: python3 scripts/check_workflow_rules.py
 
   pytest:
     name: Run Python unit test suites

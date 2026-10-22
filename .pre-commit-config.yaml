@@ -8,3 +8,11 @@ repos:
   - repo: https://github.com/shellcheck-py/shellcheck-py
     rev: v0.11.0.1
     hooks: [{ id: shellcheck }]
+  - repo: local
+    hooks:
+      - id: check-workflow-rules
+        name: Enforce AGENT.md workflow rules
+        language: system
+        entry: python3 scripts/check_workflow_rules.py
+        pass_filenames: false
+        files: ^\.github/(workflows|actions)/.*\.ya?ml$
