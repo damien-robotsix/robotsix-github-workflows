@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import textwrap
 from pathlib import Path
 
@@ -21,6 +22,7 @@ check = _module.check
 _action_file_exists = _module._action_file_exists
 _collect_local_refs_from_doc = _module._collect_local_refs_from_doc
 _own_repo_action_prefix = _module._own_repo_action_prefix
+_verify_action_at_sha = _module._verify_action_at_sha
 _DEFAULT_OWN_REPO = _module._DEFAULT_OWN_REPO
 
 
@@ -37,6 +39,24 @@ def _write_file(path: Path, content: str) -> Path:
 
 def _write_workflow(workflow_dir: Path, name: str, content: str) -> Path:
     return _write_file(workflow_dir / name, content)
+
+
+def _git(repo: Path, *args: str) -> str:
+    return subprocess.run(
+        ["git", *args],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def _init_git_repo(repo: Path) -> None:
+    repo.mkdir(parents=True, exist_ok=True)
+    _git(repo, "init", "-q")
+    _git(repo, "config", "user.email", "test@example.com")
+    _git(repo, "config", "user.name", "Test")
+    _git(repo, "config", "commit.gpgsign", "false")
 
 
 def _write_action(actions_dir: Path, name: str, filename: str = "action.yml") -> Path:
@@ -313,3 +333,126 @@ class TestCheck:
             )
             == 0
         )
+
+
+# ---------------------------------------------------------------------------
+# own-repo absolute @<sha> verification (ghwf #211)
+# ---------------------------------------------------------------------------
+
+_OWN_REPO_WORKFLOW = """
+    jobs:
+      test:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: {repo}/.github/actions/{action}@{sha}
+    """
+
+
+class TestVerifyActionAtSha:
+    """The sha-level check that catches a pin predating the action (#211)."""
+
+    def test_passes_when_action_present_at_sha(self, tmp_path: Path) -> None:
+        repo = tmp_path / "repo"
+        _init_git_repo(repo)
+        actions_dir = repo / ".github" / "actions"
+        _write_action(actions_dir, "render-harden")
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-qm", "add action")
+        sha = _git(repo, "rev-parse", "HEAD")
+        assert _verify_action_at_sha("render-harden", sha, repo_root=str(repo)) is None
+
+    def test_fails_when_action_absent_at_sha(self, tmp_path: Path) -> None:
+        repo = tmp_path / "repo"
+        _init_git_repo(repo)
+        # First commit predates the action.
+        (repo / "README.md").write_text("x\n")
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-qm", "init")
+        old_sha = _git(repo, "rev-parse", "HEAD")
+        # The action is added only in a later commit.
+        _write_action(repo / ".github" / "actions", "render-harden")
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-qm", "add action")
+        error = _verify_action_at_sha(
+            "render-harden", old_sha, repo_root=str(repo)
+        )
+        assert error is not None
+        assert old_sha in error
+
+    def test_unfetchable_sha_is_error_naming_the_sha(self, tmp_path: Path) -> None:
+        repo = tmp_path / "repo"
+        _init_git_repo(repo)
+        (repo / "README.md").write_text("x\n")
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-qm", "init")
+        missing_sha = "0" * 40
+        error = _verify_action_at_sha(
+            "render-harden", missing_sha, repo_root=str(repo)
+        )
+        assert error is not None
+        assert missing_sha in error
+
+
+class TestCheckOwnRepoShaPin:
+    """End-to-end: check() flags a workflow pinning an action @<absent sha>."""
+
+    def test_check_passes_when_action_present_at_sha(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        monkeypatch.delenv("GITHUB_REPOSITORY", raising=False)
+        repo = tmp_path / "repo"
+        _init_git_repo(repo)
+        actions_dir = repo / ".github" / "actions"
+        _write_action(actions_dir, "render-harden")
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-qm", "add action")
+        sha = _git(repo, "rev-parse", "HEAD")
+        wf_dir = repo / ".github" / "workflows"
+        _write_workflow(
+            wf_dir,
+            "ci.yml",
+            _OWN_REPO_WORKFLOW.format(
+                repo=_DEFAULT_OWN_REPO, action="render-harden", sha=sha
+            ),
+        )
+        assert (
+            check(
+                workflow_dir=str(wf_dir),
+                actions_dir=str(actions_dir),
+                repo_root=str(repo),
+            )
+            == 0
+        )
+
+    def test_check_fails_when_action_absent_at_sha(
+        self, tmp_path: Path, monkeypatch, capsys
+    ) -> None:
+        monkeypatch.delenv("GITHUB_REPOSITORY", raising=False)
+        repo = tmp_path / "repo"
+        _init_git_repo(repo)
+        (repo / "README.md").write_text("x\n")
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-qm", "init")
+        old_sha = _git(repo, "rev-parse", "HEAD")
+        actions_dir = repo / ".github" / "actions"
+        _write_action(actions_dir, "render-harden")
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-qm", "add action")
+        wf_dir = repo / ".github" / "workflows"
+        _write_workflow(
+            wf_dir,
+            "ci.yml",
+            _OWN_REPO_WORKFLOW.format(
+                repo=_DEFAULT_OWN_REPO, action="render-harden", sha=old_sha
+            ),
+        )
+        assert (
+            check(
+                workflow_dir=str(wf_dir),
+                actions_dir=str(actions_dir),
+                repo_root=str(repo),
+            )
+            == 1
+        )
+        captured = capsys.readouterr()
+        assert old_sha in captured.err

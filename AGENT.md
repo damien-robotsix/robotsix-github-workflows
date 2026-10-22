@@ -58,6 +58,16 @@ actions must follow the same conventions: a single `action.yml` at the root
 of the directory, commit-SHA-pinned `uses:` lines (Rule 1 applies), and
 `persist-credentials: false` on any `actions/checkout` step (Rule 3 applies).
 
+When a new composite action and its first `uses:` reference land together,
+the pinned sha on that reference must be a sha that **contains** the action's
+`action.yml` — a sha from before the action existed (e.g. the pre-PR main
+head) passes the working-tree orphan check but fails every consumer at
+`Set up job` once their pin moves past it (ghwf #211/#220).  For an
+already-merged action the merge commit is a valid pin.
+`scripts/check_local_action_refs.py` enforces this: it runs `git cat-file -e
+<sha>:.github/actions/<name>/action.yml` for every own-repo absolute ref, so
+the CI checkout for that job uses `fetch-depth: 0`.
+
 ### Conventional commits and release-please
 
 Commit subjects and PR titles must follow the
