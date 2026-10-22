@@ -1,5 +1,7 @@
 # robotsix-github-workflows
 
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/damien-robotsix/robotsix-github-workflows/badge)](https://scorecard.dev/viewer/?uri=github.com/damien-robotsix/robotsix-github-workflows)
+
 Shared **reusable** GitHub Actions workflows (`workflow_call`) for the robotsix fleet.
 Consumers reference these SHA-pinned, e.g.:
 
@@ -24,6 +26,7 @@ jobs:
 | `dependabot-auto-merge.yml` | auto-merge Dependabot PRs (protected & unprotected branch handling) |
 | `baseline-check.yml` | enforce AGENT.md and .github/dependabot.yml baseline rules |
 | `codeql.yml` | CodeQL static analysis |
+| `scorecard.yml` | OpenSSF Scorecard supply-chain posture analysis (SARIF to Code Scanning) |
 | `config-ownership-check.yml` | PR gate: prevents deploy-plane config from leaking component-internal settings |
 | `lint-workflows.yml` | actionlint + zizmor audit of workflow files, SARIF-upload-permission validation, and trigger-coverage validation |
 | `mutation-test.yml` | weekly advisory mutmut mutation testing (HTML report + step-summary score) |
@@ -35,7 +38,7 @@ Mill-domain checks (e.g. `check_kind_literals`) live in robotsix-mill's own CI, 
 ## Documentation
 
 - [Workflow Reference](docs/workflow-reference.md) — consolidated input, default, and secret reference
-  for all 17 reusable workflows.
+  for all 18 reusable workflows.
 - [Branch Protection](docs/branch-protection.md) — ruleset semantics, usage, and required `gh` auth scopes.
 - [Workflow Authoring](docs/WORKFLOW-AUTHORING.md) — conventions for authoring new reusable workflows:
   structure, input design and validation, error reporting, and the pre-commit checklist.
@@ -289,6 +292,35 @@ jobs:
       contents: read
 ```
 
+## `scorecard.yml` — caller template
+
+Consumer repos add a wrapper workflow (e.g. `.github/workflows/scorecard.yml`)
+that triggers on pushes to `main` and a weekly schedule:
+
+```yaml
+name: Scorecard
+on:
+  push:
+    branches: ["main"]
+  schedule:
+    - cron: "0 5 * * 1"  # Monday 05:00 UTC
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  scorecard:
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/scorecard.yml@<sha>
+    permissions:
+      # Required — SARIF upload to code scanning.
+      security-events: write
+      contents: read
+```
+
+Results land in the Security tab only.  The public Scorecard badge needs
+`publish_results: true`, which Scorecard refuses for reusable-workflow
+callers — repos that want the badge copy this repo's standalone
+[`self-scorecard.yml`](.github/workflows/self-scorecard.yml) instead.
+
 ## `docker-release.yml` — caller template
 
 Consumer repos add a wrapper workflow (e.g. `.github/workflows/docker-release.yml`) that triggers on pushes to `main` and on version tags:
@@ -536,7 +568,7 @@ jobs:
     with:
       run-actionlint: true
       run-zizmor: true
-      # sarif-workflows: "codeql.yml scan-container.yml"  # default
+      # sarif-workflows: "codeql.yml scan-container.yml scorecard.yml"  # default
 ```
 
 ## `pin-bump.yml` — caller template

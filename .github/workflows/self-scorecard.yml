@@ -1,0 +1,43 @@
+name: Scorecard
+
+# This repo's own OpenSSF Scorecard run.  It is standalone (not a caller of
+# the shared scorecard.yml) on purpose: `publish_results: true` — needed for
+# the public badge in README.md — makes the Scorecard API verify this exact
+# workflow file, and that verification rejects reusable-workflow callers,
+# top-level env/defaults, and workflow-level write permissions.
+
+on:
+  push:
+    branches: ["main"]
+  schedule:
+    - cron: "0 5 * * 1"  # Monday 05:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write  # SARIF upload to Code Scanning
+      id-token: write  # OIDC token to publish results to the Scorecard API
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          persist-credentials: false
+
+      - name: Run Scorecard analysis
+        uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc  # v2.4.4
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+
+      - name: Upload SARIF to Code Scanning
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d  # v4.38.3
+        with:
+          sarif_file: results.sarif
+          category: scorecard
