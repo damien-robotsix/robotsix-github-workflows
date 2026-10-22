@@ -113,6 +113,31 @@ class TestRender:
         # USER restore still present.
         assert "USER appuser" in out
 
+    def test_strips_pip_by_default_before_user_restore(self) -> None:
+        out = render("base:tag", "appuser")
+        assert "-m pip --version" in out
+        assert "-m pip uninstall -y pip" in out
+        # Conditional: guarded on a python3 interpreter that has pip.
+        assert "command -v python3" in out
+        assert "/usr/local/bin/python3" in out
+        # Runs as root, before the original USER is restored.
+        assert out.index("pip uninstall") < out.index("USER appuser")
+        assert out.index("apt-get") < out.index("pip uninstall")
+
+    def test_strip_pip_false_omits_pip_layer(self) -> None:
+        out = render("base:tag", "appuser", strip_pip=False)
+        assert "pip" not in out
+        assert "apt-get" in out
+        assert "USER appuser" in out
+
+    def test_pip_strip_run_is_valid_shell(self, tmp_path: Path) -> None:
+        import subprocess
+
+        body = _module._PIP_STRIP_RUN.removeprefix("RUN ").replace("\\\n", "\n")
+        script = tmp_path / "strip.sh"
+        script.write_text(body + "\n")
+        subprocess.run(["sh", "-n", str(script)], check=True)
+
     def test_empty_base_ref_raises(self) -> None:
         for bad in ("", "   "):
             try:
@@ -147,6 +172,25 @@ class TestMain:
         text = out.read_text()
         assert "FROM ghcr.io/o/r@sha256:deadbeef" in text
         assert text.rstrip().endswith("USER svc")
+        assert "pip uninstall" in text
+
+    def test_no_strip_pip_flag(self, tmp_path: Path) -> None:
+        cfg = tmp_path / "config.json"
+        cfg.write_text(json.dumps({"config": {"User": "svc"}}))
+        out = tmp_path / "Dockerfile"
+        rc = main(
+            [
+                "--base-ref",
+                "base:tag",
+                "--config",
+                str(cfg),
+                "--out",
+                str(out),
+                "--no-strip-pip",
+            ]
+        )
+        assert rc == 0
+        assert "pip" not in out.read_text()
 
     def test_non_root_base_restores_user(self, tmp_path: Path) -> None:
         # A base that genuinely runs as a non-root user => USER line emitted.
