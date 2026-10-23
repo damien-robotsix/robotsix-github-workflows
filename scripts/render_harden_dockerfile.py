@@ -47,6 +47,29 @@ _APT_RUN = (
     "    fi"
 )
 
+# The pip-strip step.  Base images such as ``python:3.14-slim`` ship their own
+# pip, whose vendored ``certifi`` (``pip/_vendor/vendor.txt``) is flagged by
+# Trivy under the bare ``Python`` target even when the application venv
+# carries a patched certifi (GHSA-6q48-6c7w-9gw2, 2026-10-21).  Fleet runtime
+# images run from uv-built venvs and never call pip at runtime, so pip is
+# uninstalled and its site-packages / bin leftovers removed.  Every candidate
+# interpreter is checked (the ``python3`` on PATH is often the app venv, which
+# has no pip, while the base's pip lives under ``/usr/local``).  Images
+# without python, or without pip, are a no-op.  Consumers that need pip at
+# runtime opt out with the ``strip-pip: false`` workflow input.
+_PIP_STRIP_RUN = (
+    "RUN set -eu; \\\n"
+    '    for py in "$(command -v python3 || true)" /usr/local/bin/python3 /usr/bin/python3; do \\\n'
+    '        [ -n "$py" ] && [ -x "$py" ] || continue; \\\n'
+    '        "$py" -m pip --version >/dev/null 2>&1 || continue; \\\n'
+    "        site=\"$(\"$py\" -c 'import sysconfig; print(sysconfig.get_paths()[\"purelib\"])')\"; \\\n"
+    "        bindir=\"$(\"$py\" -c 'import sysconfig; print(sysconfig.get_paths()[\"scripts\"])')\"; \\\n"
+    '        "$py" -m pip uninstall -y pip || true; \\\n'
+    '        rm -rf "$site"/pip "$site"/pip-*.dist-info \\\n'
+    '            "$bindir"/pip "$bindir"/pip3 "$bindir"/pip3.*; \\\n'
+    "    done"
+)
+
 
 def extract_user(config: Any) -> str | None:
     """Return the ``User`` configured on an image, or ``None`` when unknown.
@@ -99,14 +122,17 @@ def extract_user(config: Any) -> str | None:
     return None
 
 
-def render(base_ref: str, user: str = "", *, apt: bool = True) -> str:
+def render(
+    base_ref: str, user: str = "", *, apt: bool = True, strip_pip: bool = True
+) -> str:
     """Render the hardening Dockerfile as text.
 
     ``base_ref`` is the fully-qualified reference of the already-built image
     (a registry ``name@sha256:...`` digest or a local tag).  ``user`` is the
     base image's original ``USER``; when it is empty or root the wrapper simply
     stays root (which matches the base).  ``apt=False`` omits the upgrade step
-    (used only by tests / dry runs).
+    (used only by tests / dry runs).  ``strip_pip=False`` omits the
+    conditional pip uninstall (the ``strip-pip: false`` workflow opt-out).
     """
     if not base_ref or not base_ref.strip():
         raise ValueError("base_ref must be a non-empty image reference")
@@ -121,6 +147,8 @@ def render(base_ref: str, user: str = "", *, apt: bool = True) -> str:
     ]
     if apt:
         lines.append(_APT_RUN)
+    if strip_pip:
+        lines.append(_PIP_STRIP_RUN)
 
     restore = (user or "").strip()
     if restore and restore not in ("root", "0"):
@@ -168,6 +196,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Omit the apt-get upgrade layer (dry run / testing).",
     )
     parser.add_argument(
+        "--no-strip-pip",
+        action="store_true",
+        help="Keep the base image's pip (omit the conditional pip uninstall "
+        "layer) for images that need pip at runtime.",
+    )
+    parser.add_argument(
         "--allow-unknown-user",
         action="store_true",
         help="When the base image's USER cannot be determined from --config, "
@@ -191,7 +225,12 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         # Explicit opt-in: treat an unknown user as root (no USER restore).
         user = ""
-    dockerfile = render(args.base_ref, user, apt=not args.no_apt)
+    dockerfile = render(
+        args.base_ref,
+        user,
+        apt=not args.no_apt,
+        strip_pip=not args.no_strip_pip,
+    )
 
     if args.out:
         Path(args.out).write_text(dockerfile, encoding="utf-8")

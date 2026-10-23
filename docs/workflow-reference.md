@@ -92,6 +92,7 @@ No inputs.  No secrets.
 | `use-gha-cache` | boolean | `true` | Use GHA layer cache. |
 | `smoke` | boolean | `true` | Run the post-build smoke test that executes the image once to prove its entrypoint can `exec`. |
 | `smoke_command` | string | `""` | Command run inside the image via `sh -c` (e.g. `python -c "import mypkg"`). When empty, execs the image's own entrypoint/CMD binary with `--help`. |
+| `strip-pip` | boolean | `true` | Hardening layer uninstalls pip (and its site-packages/bin leftovers) from any python3 in the image — the base image's pip vendors a certifi that trips the Trivy gate. Set `false` for images that need pip at runtime; images without python are unaffected. |
 
 No secrets (uses `GITHUB_TOKEN` via caller workflow).
 
@@ -109,6 +110,7 @@ skip the cache entirely.
 | `image-name` | string | `ghcr.io/<owner>/<repo>` | Image name for publishing. |
 | `smoke` | boolean | `true` | Run the post-build smoke test that executes the image once to prove its entrypoint can `exec`. |
 | `smoke_command` | string | `""` | Command run inside the image via `sh -c` (e.g. `python -c "import mypkg"`). When empty, execs the image's own entrypoint/CMD binary with `--help`. |
+| `strip-pip` | boolean | `true` | Hardening layer uninstalls pip (and its site-packages/bin leftovers) from any python3 in the image — the base image's pip vendors a certifi that trips the Trivy gate. Set `false` for images that need pip at runtime; images without python are unaffected. |
 
 No explicit secrets input (callers pass `secrets: inherit`).
 

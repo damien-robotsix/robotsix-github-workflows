@@ -34,6 +34,17 @@ on:
         required: false
         type: string
         default: ""
+      strip-pip:
+        description: >
+          Whether the hardening layer uninstalls pip (and removes its
+          site-packages / bin leftovers) from any python3 in the image. The
+          base image's own pip vendors a certifi that trips the Trivy gate
+          (GHSA-6q48-6c7w-9gw2 on python:3.14-slim); fleet runtime images run
+          from uv-built venvs and never call pip. Set to `false` for images
+          that need pip at runtime. Images without python are unaffected.
+        required: false
+        type: boolean
+        default: true
 
 permissions: {}
 
@@ -107,6 +118,7 @@ jobs:
           base-ref: ${{ env.IMAGE_NAME }}@${{ steps.base.outputs.digest }}
           config: /tmp/base-config.json
           out: /tmp/harden/Dockerfile
+          strip-pip: ${{ inputs.strip-pip }}
 
       # Stage 2: build the hardening layer (apt security upgrade) on top of
       # the by-digest base and push it to the consumer tags WITH provenance +

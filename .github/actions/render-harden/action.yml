@@ -21,6 +21,14 @@ inputs:
     description: Path of the rendered Dockerfile to write.
     required: false
     default: /tmp/harden/Dockerfile
+  strip-pip:
+    description: >
+      When "true" (the default), the rendered layer uninstalls pip from any
+      python3 in the image that has it (the base image's pip vendors its own
+      certifi, which trips the Trivy gate). Set "false" for images that need
+      pip at runtime. Images without python are unaffected either way.
+    required: false
+    default: "true"
 
 outputs:
   dockerfile:
@@ -36,11 +44,17 @@ runs:
         BASE_REF: ${{ inputs.base-ref }}
         CONFIG: ${{ inputs.config }}
         OUT: ${{ inputs.out }}
+        STRIP_PIP: ${{ inputs.strip-pip }}
         ACTION_PATH: ${{ github.action_path }}
       run: |
         mkdir -p "$(dirname "$OUT")"
+        extra=()
+        if [ "$STRIP_PIP" = "false" ]; then
+          extra+=(--no-strip-pip)
+        fi
         python3 "$ACTION_PATH/../../../scripts/render_harden_dockerfile.py" \
           --base-ref "$BASE_REF" \
           --config "$CONFIG" \
-          --out "$OUT"
+          --out "$OUT" \
+          "${extra[@]}"
         cat "$OUT"
