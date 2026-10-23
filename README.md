@@ -29,6 +29,7 @@ jobs:
 | `scorecard.yml` | OpenSSF Scorecard supply-chain posture analysis (SARIF to Code Scanning) |
 | `config-ownership-check.yml` | PR gate: prevents deploy-plane config from leaking component-internal settings |
 | `lint-workflows.yml` | actionlint + zizmor audit of workflow files, SARIF-upload-permission validation, trigger-coverage validation, and opt-in Dockerfile `FROM` digest-pin check |
+| `lint-dockerfile.yml` | opt-in hadolint lint of one or more Dockerfiles (skipped when none exist) |
 | `mutation-test.yml` | weekly advisory mutmut mutation testing (HTML report + step-summary score) |
 | `pin-bump.yml` | scheduled per-repo first-party git pin bump PR |
 | `pin-bump-sweep.yml` | fleet-wide coherent-set pin-bump sweep orchestrator |
@@ -570,6 +571,27 @@ jobs:
       run-zizmor: true
       # sarif-workflows: "codeql.yml scan-container.yml scorecard.yml"  # default
       # dockerfiles: "Dockerfile sandbox/Dockerfile"  # opt-in FROM digest-pin gate; default "" skips
+```
+
+## `lint-dockerfile.yml` — caller template
+
+Runs [hadolint](https://github.com/hadolint/hadolint) on the listed
+Dockerfiles. Paths that do not exist are ignored; when nothing matches, the
+lint step is skipped with a notice.
+
+```yaml
+name: Lint Dockerfile
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+jobs:
+  hadolint:
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/lint-dockerfile.yml@<sha>
+    with:
+      dockerfiles: "Dockerfile Dockerfile.dev"  # space-separated paths/globs; default "Dockerfile"
+      # failure-threshold: warning  # default
+      # config: .hadolint.yaml      # optional hadolint config
 ```
 
 ## `pin-bump.yml` — caller template
