@@ -28,7 +28,7 @@ jobs:
 | `codeql.yml` | CodeQL static analysis |
 | `scorecard.yml` | OpenSSF Scorecard supply-chain posture analysis (SARIF to Code Scanning) |
 | `config-ownership-check.yml` | PR gate: prevents deploy-plane config from leaking component-internal settings |
-| `lint-workflows.yml` | actionlint + zizmor audit of workflow files, SARIF-upload-permission validation, and trigger-coverage validation |
+| `lint-workflows.yml` | actionlint + zizmor audit of workflow files, SARIF-upload-permission validation, trigger-coverage validation, and opt-in Dockerfile `FROM` digest-pin check |
 | `mutation-test.yml` | weekly advisory mutmut mutation testing (HTML report + step-summary score) |
 | `pin-bump.yml` | scheduled per-repo first-party git pin bump PR |
 | `pin-bump-sweep.yml` | fleet-wide coherent-set pin-bump sweep orchestrator |
@@ -569,6 +569,7 @@ jobs:
       run-actionlint: true
       run-zizmor: true
       # sarif-workflows: "codeql.yml scan-container.yml scorecard.yml"  # default
+      # dockerfiles: "Dockerfile sandbox/Dockerfile"  # opt-in FROM digest-pin gate; default "" skips
 ```
 
 ## `pin-bump.yml` — caller template
