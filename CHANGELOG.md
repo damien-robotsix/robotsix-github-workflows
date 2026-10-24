@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.0](https://github.com/damien-robotsix/robotsix-github-workflows/compare/v1.1.0...v1.2.0) (2026-10-23)
+
+
+### Features
+
+* Promote browser's Dockerfile FROM-digest-pin linter into a shared robotsix-github-workflows gate (20261021T183810Z-promote-browser-s-dockerfile-from-digest-1d17) ([#228](https://github.com/damien-robotsix/robotsix-github-workflows/issues/228)) ([bc35c3a](https://github.com/damien-robotsix/robotsix-github-workflows/commit/bc35c3a6bfb6dd939704ddb083b07ee7b3d44d89))
+
+
+### Bug Fixes
+
+* docker-release hardening layer: strip the base image's pip (vendored certifi) from python runtime images (20261021T122543Z-docker-release-hardening-layer-strip-the-4eac) ([#229](https://github.com/damien-robotsix/robotsix-github-workflows/issues/229)) ([873d7fc](https://github.com/damien-robotsix/robotsix-github-workflows/commit/873d7fcadb48f2ffb3b131a4c84bd4ed44a3d56c))
+
 ## [1.1.0](https://github.com/damien-robotsix/robotsix-github-workflows/compare/v1.0.7...v1.1.0) (2026-10-22)
 
 
