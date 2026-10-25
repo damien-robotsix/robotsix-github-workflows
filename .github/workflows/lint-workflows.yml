@@ -30,6 +30,22 @@ on:
         required: false
         type: string
         default: ""
+      run-workflow-rules:
+        description: >-
+          Whether to run the workflow-conventions checker
+          (scripts/check_workflow_rules.py) on the caller's
+          .github/workflows and .github/actions.
+        required: false
+        type: boolean
+        default: false
+      workflow-rules:
+        description: >-
+          Comma-separated rules enforced when run-workflow-rules is true:
+          sha-pin, persist-credentials, static-defaults, harden-runner-first,
+          setup-uv, uv-sync-frozen, or "all".
+        required: false
+        type: string
+        default: "sha-pin,persist-credentials,static-defaults"
 
 permissions:
   contents: read
@@ -92,6 +108,31 @@ jobs:
           set -f  # no glob expansion of the caller-supplied paths
           # shellcheck disable=SC2086
           python3 _workflow-lib/scripts/lint_dockerfile_pins.py $DOCKERFILES
+
+  workflow-rules:
+    name: Workflow rules
+    if: ${{ inputs.run-workflow-rules }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          persist-credentials: false
+
+      # The checker lives in THIS workflows repo, not the caller's
+      # checkout (see check-permissions above).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          repository: damien-robotsix/robotsix-github-workflows
+          ref: ${{ github.job_workflow_sha }}
+          path: _workflow-lib
+          persist-credentials: false
+
+      - name: Check workflow conventions
+        env:
+          WORKFLOW_RULES: ${{ inputs.workflow-rules }}
+        run: python3 _workflow-lib/scripts/check_workflow_rules.py --rules "$WORKFLOW_RULES"
 
   actionlint:
     name: Actionlint
