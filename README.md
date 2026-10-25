@@ -185,11 +185,11 @@ jobs:
     #   run-bandit: true                          # default
     #   bandit-severity: "medium"                 # default
     #   mypy-advisory: false                      # default
-    #   audit-ignore: ""                          # default — no advisories ignored
-    #     # When ignoring advisories, every id MUST carry a justifying
-    #     # comment (same convention as .trivyignore).  Example:
-    #     # audit-ignore: >
+    #   audit-ignore-file: ".audit-ignore"        # default — single-source ignore list
+    #     # One "ID  # reason" per line, optional "# expires: YYYY-MM-DD".
+    #     # Example .audit-ignore:
     #     #   GHSA-w8v5-vhqr-4h9v  # diskcache unsafe pickle, no fix available (2026-07)
+    #   audit-ignore: ""                          # DEPRECATED — use audit-ignore-file
     #   job_split: false                          # default — single monolithic Tests job
     #     # When true, emits three parallel jobs (Lint, Type Check, Test)
     #     # instead of one sequential Tests job.  Each reports its own
@@ -198,7 +198,7 @@ jobs:
 ```
 
 See [Workflow Reference](docs/workflow-reference.md) for all inputs, including the
-`audit-ignore` convention for suppressing advisories.
+`.audit-ignore` convention for suppressing advisories.
 
 ## `python-docs.yml` — caller template
 
@@ -666,7 +666,8 @@ jobs:
     #   run-pip-audit: true
     #   pip-audit-requirements-file: ""
     #   pip-audit-ignore-packages: ""
-    #   pip-audit-ignore-vulns: ""
+    #   audit-ignore-file: ".audit-ignore"   # shared with python-ci.yml
+    #   pip-audit-ignore-vulns: ""           # DEPRECATED — use audit-ignore-file
 ```
 
 The workflow requires only `contents: read` (declared in the reusable workflow).

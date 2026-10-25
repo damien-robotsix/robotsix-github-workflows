@@ -54,10 +54,15 @@ on:
         type: string
         default: ""
       pip-audit-ignore-vulns:
-        description: Space-separated vuln IDs expanded into repeated --ignore-vuln flags on pip-audit.
+        description: DEPRECATED — list the ids in audit-ignore-file instead (emits a warning when set). Space- or comma-separated vuln IDs merged with audit-ignore-file and expanded into repeated --ignore-vuln flags on pip-audit.
         required: false
         type: string
         default: ""
+      audit-ignore-file:
+        description: Repo-relative path of the single-source advisory ignore file shared with python-ci.yml (one "ID  # reason" per line, optional "# expires: YYYY-MM-DD"). Ids become repeated --ignore-vuln flags on pip-audit. A missing file means no advisories are ignored; an expired entry fails the audit.
+        required: false
+        type: string
+        default: ".audit-ignore"
 
 permissions:
   contents: read
@@ -124,16 +129,31 @@ jobs:
           UV_PROJECT_ENVIRONMENT: system
           INSTALL_EXTRAS: ${{ inputs.install-extras }}
 
+      # Runs after TruffleHog so the full secret scan never sees the
+      # library checkout; each pip-audit step removes it on exit.
+      - name: Checkout workflow library (audit-ignore parser)
+        if: ${{ inputs.run-pip-audit }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          repository: damien-robotsix/robotsix-github-workflows
+          ref: ${{ github.job_workflow_sha }}
+          path: _workflow-lib
+          persist-credentials: false
+
       - name: pip-audit (locked requirements file)
         if: ${{ inputs.run-pip-audit && inputs.pip-audit-requirements-file != '' }}
         # Inputs flow through env, never inline into the run block, to
-        # avoid template injection (zizmor).
+        # avoid template injection (zizmor).  Ignored ids come from the
+        # single-source audit-ignore-file (scripts/audit_ignore.py), merged
+        # with the deprecated pip-audit-ignore-vulns input.
         env:
           UV_PROJECT_ENVIRONMENT: system
           PIP_AUDIT_REQUIREMENTS_FILE: ${{ inputs.pip-audit-requirements-file }}
           PIP_AUDIT_IGNORE_PACKAGES: ${{ inputs.pip-audit-ignore-packages }}
           PIP_AUDIT_IGNORE_VULNS: ${{ inputs.pip-audit-ignore-vulns }}
+          AUDIT_IGNORE_FILE: ${{ inputs.audit-ignore-file }}
         run: |
+          trap 'rm -rf _workflow-lib' EXIT
           no_emit=""
           # shellcheck disable=SC2086
           for p in $PIP_AUDIT_IGNORE_PACKAGES; do
@@ -141,27 +161,21 @@ jobs:
           done
           # shellcheck disable=SC2086
           uv export --frozen --no-emit-project $no_emit -o "$PIP_AUDIT_REQUIREMENTS_FILE"
-          ignore=""
-          # shellcheck disable=SC2086
-          for v in $PIP_AUDIT_IGNORE_VULNS; do
-            ignore="$ignore --ignore-vuln $v"
-          done
-          # shellcheck disable=SC2086
-          uv run --with pip-audit pip-audit -r "$PIP_AUDIT_REQUIREMENTS_FILE" $ignore
+          python3 _workflow-lib/scripts/audit_ignore.py \
+            --file "$AUDIT_IGNORE_FILE" --extra "$PIP_AUDIT_IGNORE_VULNS" --format pip-audit -- \
+            uv run --with pip-audit pip-audit -r "$PIP_AUDIT_REQUIREMENTS_FILE"
 
       - name: pip-audit (synced environment)
         if: ${{ inputs.run-pip-audit && inputs.pip-audit-requirements-file == '' }}
         env:
           UV_PROJECT_ENVIRONMENT: system
           PIP_AUDIT_IGNORE_VULNS: ${{ inputs.pip-audit-ignore-vulns }}
+          AUDIT_IGNORE_FILE: ${{ inputs.audit-ignore-file }}
         run: |
-          ignore=""
-          # shellcheck disable=SC2086
-          for v in $PIP_AUDIT_IGNORE_VULNS; do
-            ignore="$ignore --ignore-vuln $v"
-          done
-          # shellcheck disable=SC2086
-          uv run --with pip-audit pip-audit $ignore
+          trap 'rm -rf _workflow-lib' EXIT
+          python3 _workflow-lib/scripts/audit_ignore.py \
+            --file "$AUDIT_IGNORE_FILE" --extra "$PIP_AUDIT_IGNORE_VULNS" --format pip-audit -- \
+            uv run --with pip-audit pip-audit
 
       - name: Generate SBOM (CycloneDX)
         if: always()
