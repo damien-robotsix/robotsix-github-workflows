@@ -122,8 +122,27 @@ No explicit secrets input (callers pass `secrets: inherit`).
 | `run-zizmor` | boolean | `false` | Run zizmor security audit. |
 | `sarif-workflows` | string | `codeql.yml scan-container.yml scorecard.yml` | Workflow basenames requiring security-events:write. |
 | `dockerfiles` | string | `""` | Space-separated Dockerfile paths whose `FROM` lines must be digest-pinned (e.g. `Dockerfile sandbox/Dockerfile`). Empty skips the check. |
+| `run-workflow-rules` | boolean | `false` | Run `scripts/check_workflow_rules.py` on the caller's `.github/workflows` and `.github/actions`. |
+| `workflow-rules` | string | `sha-pin,persist-credentials,static-defaults` | Comma-separated rules enforced when `run-workflow-rules` is true, or `all`. |
 
 No secrets.
+
+When `run-workflow-rules` is true, the `workflow-rules` job enforces the
+selected conventions:
+
+| Rule | Checks |
+|---|---|
+| `sha-pin` | Every remote `uses:` is pinned to a 40-char commit SHA with a trailing `# vX[.Y[.Z]]` comment (own-repo composite-action refs need no comment). |
+| `persist-credentials` | Every `actions/checkout` sets `persist-credentials: false`, unless the step carries `# zizmor: ignore[artipacked]`. |
+| `static-defaults` | `workflow_call` input defaults are static literals, not `${{ }}` expressions. |
+| `harden-runner-first` | The first step of every job is `step-security/harden-runner`. |
+| `setup-uv` | Every job whose `run:` steps invoke `uv` includes an `astral-sh/setup-uv` step. |
+| `uv-sync-frozen` | Every `uv sync` invocation passes `--frozen`. |
+
+The job-level rules (`harden-runner-first`, `setup-uv`) expand local composite
+actions into the calling job and skip reusable-workflow jobs. The
+robotsix-github-auth `check_ci_conventions.py` set maps to
+`workflow-rules: "harden-runner-first,persist-credentials,setup-uv,uv-sync-frozen"`.
 
 When `dockerfiles` is set, the `dockerfile-pins` job runs
 `scripts/lint_dockerfile_pins.py` (ported from robotsix-browser) on each
