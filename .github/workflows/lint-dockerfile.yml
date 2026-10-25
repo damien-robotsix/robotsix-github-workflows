@@ -1,0 +1,78 @@
+name: Lint Dockerfile
+
+# Opt-in shared hadolint gate. Consumer repos call this instead of
+# hand-rolling a hadolint job (or skipping the pre-commit hook in CI).
+# When none of the requested Dockerfiles exist, the lint step is skipped
+# with a notice rather than failing.
+
+on:
+  workflow_call:
+    inputs:
+      dockerfiles:
+        description: >-
+          Space-separated list of Dockerfile paths or glob patterns, relative
+          to the repository root, e.g. "Dockerfile Dockerfile.dev" or
+          "Dockerfile docker/*.Dockerfile".
+        required: false
+        type: string
+        default: "Dockerfile"
+      failure-threshold:
+        description: >-
+          Fail only on rules at or above this severity. One of
+          error | warning | info | style | ignore.
+        required: false
+        type: string
+        default: "warning"
+      config:
+        description: >-
+          Path to a hadolint config file (e.g. `.hadolint.yaml`), relative to
+          the repository root. Empty (the default) uses hadolint's own
+          config discovery.
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  hadolint:
+    name: Hadolint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          persist-credentials: false
+
+      - name: Resolve Dockerfiles
+        id: resolve
+        env:
+          DOCKERFILES: ${{ inputs.dockerfiles }}
+        run: |
+          shopt -s nullglob globstar
+          files=()
+          # Word-splitting and glob expansion of $DOCKERFILES is intentional.
+          # shellcheck disable=SC2086
+          for f in $DOCKERFILES; do
+            if [ -f "$f" ]; then
+              files+=("$f")
+            fi
+          done
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::notice::No Dockerfile matched '${DOCKERFILES}'; skipping hadolint."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Linting: ${files[*]}"
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "files=${files[*]}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run hadolint
+        if: ${{ steps.resolve.outputs.found == 'true' }}
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387  # v3.5.0
+        with:
+          dockerfile: ${{ steps.resolve.outputs.files }}
+          failure-threshold: ${{ inputs.failure-threshold }}
+          config: ${{ inputs.config }}

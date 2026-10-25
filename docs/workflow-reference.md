@@ -134,6 +134,16 @@ declared before the first `FROM`, and an ARG with no default is reported
 because the linter cannot prove it is pinned. Pin a tag with
 `<image>:<tag>@sha256:<digest>`.
 
+## `lint-dockerfile.yml`
+
+| Input | Type | Default | Description |
+|---|---|---|---|
+| `dockerfiles` | string | `Dockerfile` | Space-separated Dockerfile paths or glob patterns (e.g. `Dockerfile Dockerfile.dev`). Non-existent paths are ignored; if nothing matches, hadolint is skipped with a notice. |
+| `failure-threshold` | string | `warning` | Fail only on rules at or above this severity (`error`, `warning`, `info`, `style`, `ignore`). |
+| `config` | string | `""` | Path to a hadolint config file. Empty uses hadolint's default config discovery. |
+
+No secrets.
+
 ## `mutation-test.yml`
 
 | Input | Type | Default | Description |
