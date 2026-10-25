@@ -237,7 +237,8 @@ states the accepted alternatives in its response header:
 | `run-bandit` | boolean | `true` | Run bandit. |
 | `bandit-severity` | string | `medium` | Bandit severity threshold. |
 | `mypy-advisory` | boolean | `false` | Advisory-only mypy (don't fail). |
-| `audit-ignore` | string | `""` | Space/comma-separated advisory IDs. |
+| `audit-ignore-file` | string | `.audit-ignore` | Single-source advisory ignore file (see [Audit ignore file](#audit-ignore-file)). |
+| `audit-ignore` | string | `""` | **Deprecated** — space/comma-separated advisory IDs, merged with `audit-ignore-file`. |
 | `job_split` | boolean | `false` | Split into parallel lint/type/test jobs. |
 
 No secrets.
@@ -281,7 +282,8 @@ backoff between attempts to handle transient PyPI or registry errors.
 | `run-pip-audit` | boolean | `true` | Run pip-audit. |
 | `pip-audit-requirements-file` | string | `""` | Requirements file for pip-audit. |
 | `pip-audit-ignore-packages` | string | `""` | Packages to ignore. |
-| `pip-audit-ignore-vulns` | string | `""` | Vuln IDs to ignore. |
+| `audit-ignore-file` | string | `.audit-ignore` | Single-source advisory ignore file shared with `python-ci.yml` (see [Audit ignore file](#audit-ignore-file)). |
+| `pip-audit-ignore-vulns` | string | `""` | **Deprecated** — vuln IDs to ignore, merged with `audit-ignore-file`. |
 
 No secrets.
 
@@ -295,6 +297,37 @@ environment directly via `uv run pip-audit`.
 
 An SBOM (CycloneDX JSON) is generated and uploaded as a build artifact on
 every run via `always()`, so it is available even when scans fail.
+
+### Audit ignore file
+
+`python-ci.yml` (uv audit and its pip-audit fallback), `python-security.yml`
+(pip-audit) and the `uv-audit` pre-commit hook all read one repo-root file,
+`.audit-ignore` by default, parsed by `scripts/audit_ignore.py`:
+
+```text
+# one advisory per line; a "# reason" comment is mandatory
+GHSA-w8v5-vhqr-4h9v  # diskcache unsafe pickle, no fix available
+CVE-2026-12345       # transitive via foo, upstream PR open  # expires: 2026-12-31
+```
+
+* Ids become `--ignore-until-fixed` on `uv audit` (auto-clears once a fix
+  ships) and `--ignore-vuln` on pip-audit (which has no until-fixed mode —
+  use `# expires:` to bound the ignore).
+* An entry without a reason, a duplicate, a malformed id or an entry whose
+  `# expires:` date has passed fails the audit step.
+* A missing file means no advisories are ignored.
+* The inline `audit-ignore` / `pip-audit-ignore-vulns` inputs still work
+  (merged with the file) but emit a deprecation warning.
+
+Consumers can reuse the same file locally via `.pre-commit-hooks.yaml`:
+
+```yaml
+- repo: https://github.com/damien-robotsix/robotsix-github-workflows
+  rev: <sha>
+  hooks:
+    - id: audit-ignore-check   # validate format / reasons / expiry
+    - id: uv-audit             # uv audit --frozen --preview + .audit-ignore ids
+```
 
 ## `scorecard.yml`
 

@@ -1,0 +1,24 @@
+# Hooks consumers can pull in from their own .pre-commit-config.yaml:
+#
+#   - repo: https://github.com/damien-robotsix/robotsix-github-workflows
+#     rev: <sha>
+#     hooks:
+#       - id: audit-ignore-check
+#       - id: uv-audit
+#
+# Both read the same single-source .audit-ignore file as the python-ci.yml
+# and python-security.yml reusable workflows (see scripts/audit_ignore.py).
+- id: audit-ignore-check
+  name: Validate .audit-ignore (format, reasons, expiry)
+  description: Fails on malformed, unexplained, duplicate or expired entries in .audit-ignore.
+  language: script
+  entry: scripts/audit_ignore.py --check
+  files: ^\.audit-ignore$
+  pass_filenames: false
+- id: uv-audit
+  name: uv audit (honouring .audit-ignore)
+  description: Runs `uv audit --frozen --preview` with every .audit-ignore id passed as --ignore-until-fixed.
+  language: script
+  entry: scripts/audit_ignore.py --format uv -- uv audit --frozen --preview
+  files: ^(uv\.lock|\.audit-ignore)$
+  pass_filenames: false

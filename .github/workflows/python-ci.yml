@@ -58,15 +58,24 @@ on:
         default: true
       audit-ignore:
         description: >
-          Space- or comma-separated GHSA/CVE ids to pass as repeated
-          --ignore-until-fixed flags to uv audit. Each ignored id MUST
-          carry a justifying comment in the caller workflow (same convention
-          as .trivyignore). Ignored ids are automatically un-ignored once a
-          fix ships, matching the fleet policy of blocking on fixable
-          findings only.
+          DEPRECATED — list the ids in audit-ignore-file instead (emits a
+          warning when set). Space- or comma-separated GHSA/CVE ids merged
+          with audit-ignore-file and passed as repeated --ignore-until-fixed
+          flags to uv audit (--ignore-vuln on the pip-audit fallback).
         required: false
         type: string
         default: ""
+      audit-ignore-file:
+        description: >
+          Repo-relative path of the single-source advisory ignore file
+          (one "ID  # reason" per line, optional "# expires: YYYY-MM-DD").
+          Shared with python-security.yml and the audit-ignore pre-commit
+          hook. A missing file means no advisories are ignored; an expired
+          entry fails the audit. Ids map to --ignore-until-fixed on uv audit
+          (auto-clears once a fix ships) and --ignore-vuln on pip-audit.
+        required: false
+        type: string
+        default: ".audit-ignore"
       run-bandit:
         description: Whether to run the bandit security SAST step.
         required: false
@@ -148,11 +157,21 @@ jobs:
         # ship deptry itself.
         run: uv run --with deptry deptry .
 
+      - name: Checkout workflow library (audit-ignore parser)
+        if: ${{ inputs.run-audit }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          repository: damien-robotsix/robotsix-github-workflows
+          ref: ${{ github.job_workflow_sha }}
+          path: _workflow-lib
+          persist-credentials: false
+
       - name: Dependency audit (CVE scan)
         if: ${{ inputs.run-audit }}
         env:
           UV_PROJECT_ENVIRONMENT: system
           AUDIT_IGNORE: ${{ inputs.audit-ignore }}
+          AUDIT_IGNORE_FILE: ${{ inputs.audit-ignore-file }}
         # uv audit --frozen reads the committed uv.lock natively.
         # It's a preview subcommand (needs --preview in stable builds)
         # but --help works without --preview since uv ≥ 0.6.12, so we
@@ -161,24 +180,28 @@ jobs:
         # IMPORTANT: we must NOT ||-fallback on uv audit's exit code
         # because a non-zero exit can also mean "CVEs found" — masking
         # those via a passthrough pip-audit run would be a false-pass.
+        # Ignored ids come from the single-source audit-ignore-file
+        # (scripts/audit_ignore.py), merged with the deprecated inline
+        # audit-ignore input; both the uv audit and pip-audit paths honour
+        # them.  The library checkout is removed afterwards so later ruff /
+        # mypy / bandit steps never scan it.
         run: |
+          trap 'rm -rf _workflow-lib' EXIT
+          lib=_workflow-lib/scripts/audit_ignore.py
           if uv audit --help >/dev/null 2>&1; then
-            # Build repeated --ignore-until-fixed flags from audit-ignore input
-            # (space- or comma-separated). --ignore-until-fixed automatically
-            # un-ignores once a fix ships, matching the fleet policy of
-            # blocking on fixable findings only.
-            audit_ignore_flags=""
-            for id in $(echo "$AUDIT_IGNORE" | tr ',' ' '); do
-              audit_ignore_flags="$audit_ignore_flags --ignore-until-fixed $id"
-            done
-            # shellcheck disable=SC2086
-            uv audit --frozen --preview $audit_ignore_flags
+            # --ignore-until-fixed automatically un-ignores once a fix
+            # ships, matching the fleet policy of blocking on fixable
+            # findings only.
+            python3 "$lib" --file "$AUDIT_IGNORE_FILE" --extra "$AUDIT_IGNORE" --format uv -- \
+              uv audit --frozen --preview
           else
             # --no-hashes avoids pip hash-verification failures on VCS (git)
             # dependencies, which can't carry hashes. Also strip the editable
             # project line (-e .) — pip-audit cannot install editable file://
             # requirements.
-            uv export --frozen --no-hashes | grep -v '^-e \.' | uv run --with pip-audit pip-audit -r /dev/stdin
+            uv export --frozen --no-hashes | grep -v '^-e \.' | \
+              python3 "$lib" --file "$AUDIT_IGNORE_FILE" --extra "$AUDIT_IGNORE" --format pip-audit -- \
+              uv run --with pip-audit pip-audit -r /dev/stdin
           fi
 
       - name: Ruff (lint + format check)
@@ -313,21 +336,31 @@ jobs:
           UV_PROJECT_ENVIRONMENT: system
         run: uv run --with deptry deptry .
 
+      - name: Checkout workflow library (audit-ignore parser)
+        if: ${{ inputs.run-audit }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          repository: damien-robotsix/robotsix-github-workflows
+          ref: ${{ github.job_workflow_sha }}
+          path: _workflow-lib
+          persist-credentials: false
+
       - name: Dependency audit (CVE scan)
         if: ${{ inputs.run-audit }}
         env:
           UV_PROJECT_ENVIRONMENT: system
           AUDIT_IGNORE: ${{ inputs.audit-ignore }}
+          AUDIT_IGNORE_FILE: ${{ inputs.audit-ignore-file }}
         run: |
+          trap 'rm -rf _workflow-lib' EXIT
+          lib=_workflow-lib/scripts/audit_ignore.py
           if uv audit --help >/dev/null 2>&1; then
-            audit_ignore_flags=""
-            for id in $(echo "$AUDIT_IGNORE" | tr ',' ' '); do
-              audit_ignore_flags="$audit_ignore_flags --ignore-until-fixed $id"
-            done
-            # shellcheck disable=SC2086
-            uv audit --frozen --preview $audit_ignore_flags
+            python3 "$lib" --file "$AUDIT_IGNORE_FILE" --extra "$AUDIT_IGNORE" --format uv -- \
+              uv audit --frozen --preview
           else
-            uv export --frozen --no-hashes | grep -v '^-e \.' | uv run --with pip-audit pip-audit -r /dev/stdin
+            uv export --frozen --no-hashes | grep -v '^-e \.' | \
+              python3 "$lib" --file "$AUDIT_IGNORE_FILE" --extra "$AUDIT_IGNORE" --format pip-audit -- \
+              uv run --with pip-audit pip-audit -r /dev/stdin
           fi
 
       - name: Ruff (lint + format check)
