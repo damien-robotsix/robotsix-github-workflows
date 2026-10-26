@@ -28,7 +28,7 @@ jobs:
 | `codeql.yml` | CodeQL static analysis |
 | `scorecard.yml` | OpenSSF Scorecard supply-chain posture analysis (SARIF to Code Scanning) |
 | `config-ownership-check.yml` | PR gate: prevents deploy-plane config from leaking component-internal settings |
-| `lint-workflows.yml` | actionlint + zizmor audit of workflow files, SARIF-upload-permission validation, trigger-coverage validation, opt-in workflow-conventions checker, and opt-in Dockerfile `FROM` digest-pin check |
+| `lint-workflows.yml` | actionlint + zizmor audit of workflow files, SARIF-upload-permission validation, trigger-coverage validation, opt-in workflow-conventions checker, opt-in Dockerfile `FROM` digest-pin check, and opt-in `.trivyignore` expiry gate |
 | `lint-dockerfile.yml` | opt-in hadolint lint of one or more Dockerfiles (skipped when none exist) |
 | `mutation-test.yml` | weekly advisory mutmut mutation testing (HTML report + step-summary score) |
 | `pin-bump.yml` | scheduled per-repo first-party git pin bump PR |
@@ -573,6 +573,8 @@ jobs:
       # dockerfiles: "Dockerfile sandbox/Dockerfile"  # opt-in FROM digest-pin gate; default "" skips
       # run-workflow-rules: true  # opt-in workflow-conventions checker
       # workflow-rules: "sha-pin,persist-credentials,static-defaults"  # default; or "all"
+      # trivyignore: .trivyignore  # opt-in "# expires: YYYY-MM-DD" gate; default "" skips
+      # trivyignore-missing-expiry: warn  # or "fail" for entries without an expiry
 ```
 
 ## `lint-dockerfile.yml` — caller template

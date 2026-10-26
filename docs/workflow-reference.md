@@ -124,6 +124,8 @@ No explicit secrets input (callers pass `secrets: inherit`).
 | `dockerfiles` | string | `""` | Space-separated Dockerfile paths whose `FROM` lines must be digest-pinned (e.g. `Dockerfile sandbox/Dockerfile`). Empty skips the check. |
 | `run-workflow-rules` | boolean | `false` | Run `scripts/check_workflow_rules.py` on the caller's `.github/workflows` and `.github/actions`. |
 | `workflow-rules` | string | `sha-pin,persist-credentials,static-defaults` | Comma-separated rules enforced when `run-workflow-rules` is true, or `all`. |
+| `trivyignore` | string | `""` | Path of a `.trivyignore` whose entries must carry `# expires: YYYY-MM-DD` (e.g. `.trivyignore`). Empty skips the check. |
+| `trivyignore-missing-expiry` | string | `warn` | Policy for entries without an `# expires:` annotation: `warn` or `fail`. |
 
 No secrets.
 
@@ -152,6 +154,16 @@ build stage are exempt; `$ARG` references are expanded from `ARG` defaults
 declared before the first `FROM`, and an ARG with no default is reported
 because the linter cannot prove it is pinned. Pin a tag with
 `<image>:<tag>@sha256:<digest>`.
+
+When `trivyignore` is set, the `trivyignore-expiry` job runs
+`scripts/check_trivyignore_expiry.py` (ported from robotsix-mill) on that
+file. Every suppression is expected to look like
+`CVE-2025-12345  # expires: 2026-12-31`; blank lines and full-line comments
+are ignored. The job fails once any entry's expiry date is reached (the date
+itself counts as expired) or when a date is malformed, so suppressions come
+back up for review instead of living forever. Entries with no `# expires:`
+annotation are reported as warnings, or fail the job when
+`trivyignore-missing-expiry: fail`. A path that does not exist fails the job.
 
 ## `lint-dockerfile.yml`
 
