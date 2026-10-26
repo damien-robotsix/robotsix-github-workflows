@@ -661,6 +661,14 @@ jobs:
       app-private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}  # GitHub App private key
 ```
 
+Each repo's force-push of the `pin-bump/sweep` branch is retried up to 3 times
+(10 s, 20 s, 40 s back-off) when GitHub returns a transient 5xx (e.g.
+`remote: Internal Server Error`, `HTTP 5xx`, `The remote end hung up
+unexpectedly`); auth, protected-branch and non-fast-forward rejections still
+fail immediately. A repo that succeeded only after a retry is listed under
+`### Bumped` in the sweep summary with a `(retried N×)` note, and each retry
+logs the GitHub request id.
+
 ## `python-security.yml` — caller template
 
 Consumer repos add a wrapper workflow (e.g. `.github/workflows/python-security.yml`)
