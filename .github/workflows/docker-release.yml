@@ -109,13 +109,15 @@ on:
         default: ""
       push-retries:
         description: >
-          Extra attempts for the hardened-image build+push when it fails
+          Extra attempts for the component base push-by-digest (Stage 1)
+          and for the hardened-image build+push (Stage 2) when they fail
           (e.g. GHCR's intermittent `unknown blob` blob-upload race). Each
-          retry re-runs `docker buildx build --push` from the warm builder
-          cache after a short back-off; blobs already uploaded are reused.
-          Retries stay inside the push step, so the Trivy gate, smoke test
-          and attestations run once, on the published image. `0` keeps a
-          single attempt.
+          retry re-runs `docker buildx build` after a short back-off; blobs
+          already uploaded are reused. Stage 1 is retried only when its
+          first push fails. Retries stay inside the push steps, so the
+          Trivy gate, smoke test and attestations run once, on the
+          published image. Must be an integer from 0 to 10 (larger values
+          are rejected). `0` keeps a single attempt.
         required: false
         type: number
         default: 3
@@ -153,6 +155,17 @@ jobs:
         with:
           persist-credentials: false
 
+      # Validated up front so a bad value fails before the long builds, not
+      # on the first retry. Both push loops (Stage 1 and Stage 2) read it.
+      - name: Validate push-retries
+        env:
+          PUSH_RETRIES: ${{ inputs.push-retries }}
+        run: |
+          case "$PUSH_RETRIES" in
+            0|1|2|3|4|5|6|7|8|9|10) ;;
+            *) echo "::error::push-retries must be an integer from 0 to 10, got '$PUSH_RETRIES'"; exit 1 ;;
+          esac
+
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4
 
       - name: Log in to GitHub Container Registry
@@ -175,8 +188,12 @@ jobs:
       # tag), so no un-patched image is ever tagged in the registry. The
       # digest gives Stage 2 a registry base to build FROM. Provenance/SBOM
       # are disabled here — they belong on the final (patched) image.
+      # continue-on-error: a failed by-digest push (GHCR `unknown blob`
+      # blob-upload race, which hits the bulk app layers here) is retried by
+      # the step below instead of failing the run at once.
       - name: Build base image (push by digest, untagged)
-        id: base
+        id: base-push
+        continue-on-error: true
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7
         with:
           context: .
@@ -188,6 +205,85 @@ jobs:
           secrets: |
             ${{ inputs.github-token-secret-id != '' && format('{0}={1}', inputs.github-token-secret-id, secrets.GITHUB_TOKEN) || '' }}
             ${{ secrets.build-secrets }}
+
+      # Retry of the Stage-1 by-digest push, run only when the step above
+      # failed; a success keeps the path above untouched. Same bounded
+      # back-off and `push-retries` input as the Stage-2 loop. Mirrors the
+      # build-push-action call: same Dockerfile, build args, secrets and
+      # by-digest output, with the digest read from buildx metadata.
+      - name: Retry base image push (push by digest)
+        id: base-retry
+        if: steps.base-push.outcome == 'failure'
+        env:
+          DOCKERFILE: ${{ inputs.dockerfile }}
+          BUILD_ARGS: ${{ inputs.build-args }}
+          GITHUB_TOKEN_ID: ${{ inputs.github-token-secret-id }}
+          GITHUB_TOKEN_VALUE: ${{ secrets.GITHUB_TOKEN }}
+          BUILD_SECRETS: ${{ secrets.build-secrets }}
+          PUSH_RETRIES: ${{ inputs.push-retries }}
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"
+          trap 'rm -rf "$work"' EXIT
+          args=(--file "$DOCKERFILE" --provenance=false
+                --output "type=image,name=${IMAGE_NAME},push-by-digest=true,name-canonical=true,push=true")
+          while IFS= read -r arg; do
+            if [ -n "$arg" ]; then args+=(--build-arg "$arg"); fi
+          done <<< "$BUILD_ARGS"
+          # Secrets: the optional GITHUB_TOKEN entry, then the caller's
+          # build-secrets. Each value goes to its own 0600 file, never argv.
+          : > "$work/secrets"
+          if [ -n "$GITHUB_TOKEN_ID" ]; then
+            printf '%s=%s\n' "$GITHUB_TOKEN_ID" "$GITHUB_TOKEN_VALUE" >> "$work/secrets"
+          fi
+          printf '%s\n' "$BUILD_SECRETS" >> "$work/secrets"
+          n=0
+          while IFS= read -r line; do
+            if [ -n "$line" ]; then
+              n=$((n + 1))
+              printf '%s' "${line#*=}" > "$work/secret-$n"
+              args+=(--secret "id=${line%%=*},src=$work/secret-$n")
+            fi
+          done < "$work/secrets"
+          attempts=$((PUSH_RETRIES + 1))
+          attempt=1
+          while :; do
+            echo "Base push attempt ${attempt}/${attempts}"
+            rm -f /tmp/base-metadata.json
+            if docker buildx build "${args[@]}" --metadata-file /tmp/base-metadata.json .; then
+              break
+            fi
+            if [ "$attempt" -ge "$attempts" ]; then
+              echo "::error::Base image push failed after ${attempts} attempt(s)"
+              exit 1
+            fi
+            delay=$((attempt * 15))
+            echo "::warning::Base push attempt ${attempt}/${attempts} failed; retrying in ${delay}s"
+            sleep "$delay"
+            attempt=$((attempt + 1))
+          done
+          # sed, not jq: jq is not guaranteed on self-hosted runners.
+          digest="$(sed -n 's/.*"containerimage\.digest": *"\(sha256:[0-9a-f]*\)".*/\1/p' /tmp/base-metadata.json | head -1)"
+          if [ -z "$digest" ]; then
+            echo "::error::No containerimage.digest in base push metadata"
+            exit 1
+          fi
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      # Single source of the base digest for the steps below: the first
+      # push's digest, or the retry's when the first push failed.
+      - name: Resolve base digest
+        id: base
+        env:
+          PUSH_DIGEST: ${{ steps.base-push.outputs.digest }}
+          RETRY_DIGEST: ${{ steps.base-retry.outputs.digest }}
+        run: |
+          digest="${PUSH_DIGEST:-$RETRY_DIGEST}"
+          if [ -z "$digest" ]; then
+            echo "::error::No base image digest from either push attempt"
+            exit 1
+          fi
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
       # Read the base image's configured USER so the hardening layer can run
       # apt as root and then restore the original user, leaving runtime
@@ -218,7 +314,10 @@ jobs:
       # step (docker buildx build, not build-push-action) so a retry never
       # re-runs the Trivy gate or anything else; the provenance/SBOM
       # attestations are pushed with the image index by the attempt that
-      # succeeds.
+      # succeeds. `builder-id` is a documented buildx provenance attribute
+      # (buildx >= 0.11; see Docker docs, "Attestations > provenance >
+      # builder-id": https://docs.docker.com/build/attestations/slsa-provenance/).
+      # build-push-action used to set it implicitly.
       - name: Build and push hardened image
         id: build
         env:
@@ -230,14 +329,12 @@ jobs:
           set -euo pipefail
           args=()
           while IFS= read -r tag; do
-            [ -n "$tag" ] && args+=(--tag "$tag")
+            if [ -n "$tag" ]; then args+=(--tag "$tag"); fi
           done <<< "$TAGS"
           while IFS= read -r label; do
-            [ -n "$label" ] && args+=(--label "$label")
+            if [ -n "$label" ]; then args+=(--label "$label"); fi
           done <<< "$LABELS"
-          retries="${PUSH_RETRIES:-0}"
-          case "$retries" in ''|*[!0-9]*) echo "::error::push-retries must be a non-negative integer, got '$retries'"; exit 1 ;; esac
-          attempts=$((retries + 1))
+          attempts=$((PUSH_RETRIES + 1))
           attempt=1
           while :; do
             echo "Build and push attempt ${attempt}/${attempts}"
