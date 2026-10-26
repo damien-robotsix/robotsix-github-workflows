@@ -93,11 +93,72 @@ def resolve_default_branch_head(git_url: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+# PEP 508 direct-URL git pin: ``name[extras] @ git+URL@<40-hex>[#frag][; marker]``
+_DIRECT_URL_GIT_PIN_RE = re.compile(
+    r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:\[[^\]]*\])?\s*@\s*"
+    r"git\+(\S+?)@([0-9a-f]{40})(?=$|[#;\s])"
+)
+
+
+def _iter_dependency_strings(data: dict) -> list[str]:  # type: ignore[type-arg]
+    """Return every PEP 508 requirement string from ``[project.dependencies]``,
+    ``[project.optional-dependencies]`` and ``[dependency-groups]``."""
+    reqs: list[str] = []
+    project = data.get("project", {})
+    if isinstance(project, dict):
+        reqs.extend(
+            d for d in project.get("dependencies", []) or [] if isinstance(d, str)
+        )
+        optional = project.get("optional-dependencies", {}) or {}
+        if isinstance(optional, dict):
+            for group in optional.values():
+                if isinstance(group, list):
+                    reqs.extend(d for d in group if isinstance(d, str))
+    groups = data.get("dependency-groups", {}) or {}
+    if isinstance(groups, dict):
+        for group in groups.values():
+            if isinstance(group, list):
+                # Entries may also be ``{include-group = "..."}`` tables.
+                reqs.extend(d for d in group if isinstance(d, str))
+    return reqs
+
+
+def _extract_git_pins(data: dict) -> list[tuple[str, str, str]]:  # type: ignore[type-arg]
+    """Return ``[(pkg_name, git_url, rev)]`` for every SHA-pinned git dependency.
+
+    Covers both ``[tool.uv.sources]`` inline tables with a 40-char ``rev``
+    and PEP 508 direct-URL requirements of the form
+    ``name @ git+URL@<40-hex>`` in ``[project.dependencies]``,
+    ``[project.optional-dependencies]`` and ``[dependency-groups]``.
+    """
+    pins: list[tuple[str, str, str]] = []
+    seen: set[tuple[str, str, str]] = set()
+    raw = data.get("tool", {}).get("uv", {}).get("sources", {})
+    for name, spec in raw.items():
+        if isinstance(spec, dict) and "git" in spec:
+            rev = spec.get("rev")
+            if rev and isinstance(rev, str) and len(rev) == 40:
+                pins.append((name, spec["git"], rev))
+                seen.add((name, spec["git"], rev))
+    for req in _iter_dependency_strings(data):
+        m = _DIRECT_URL_GIT_PIN_RE.match(req)
+        if m is None:
+            continue
+        pin = (m.group(1), m.group(2), m.group(3))
+        if pin not in seen:
+            seen.add(pin)
+            pins.append(pin)
+    return pins
+
+
 def parse_git_sources(pyproject_path: Path) -> dict[str, dict[str, str]]:
     """Return ``{pkg_name: {git: url, rev: sha}}`` for every git-sourced entry.
 
-    Only entries whose value is a dict containing a ``git`` key are
-    included.  Entries without a ``rev`` are skipped (they are unpinned).
+    Includes ``[tool.uv.sources]`` entries whose value is a dict containing
+    a ``git`` key and a 40-char ``rev`` (entries without one are unpinned
+    and skipped), plus PEP 508 direct-URL pins (``name @ git+URL@<sha>``)
+    in ``[project.dependencies]``, ``[project.optional-dependencies]`` and
+    ``[dependency-groups]``.
     """
     if tomllib is None:
         raise RuntimeError("tomllib requires Python >= 3.11")
@@ -106,12 +167,8 @@ def parse_git_sources(pyproject_path: Path) -> dict[str, dict[str, str]]:
         data = tomllib.load(fh)
 
     sources: dict[str, dict[str, str]] = {}
-    raw = data.get("tool", {}).get("uv", {}).get("sources", {})
-    for name, spec in raw.items():
-        if isinstance(spec, dict) and "git" in spec:
-            rev = spec.get("rev")
-            if rev and isinstance(rev, str) and len(rev) == 40:
-                sources[name] = {"git": spec["git"], "rev": rev}
+    for name, url, rev in _extract_git_pins(data):
+        sources.setdefault(name, {"git": url, "rev": rev})
     return sources
 
 
@@ -125,9 +182,10 @@ def rewrite_revs(pyproject_path: Path, bumps: dict[str, str]) -> None:
 
     *bumps* maps package name → new SHA.
 
-    Only matches ``rev`` lines inside a ``[tool.uv.sources.<name>]``
-    inline-table — the regex is intentionally narrow to avoid accidental
-    replacements in unrelated TOML sections.
+    Matches ``rev`` lines inside a ``[tool.uv.sources.<name>]``
+    inline-table, and quoted PEP 508 direct-URL requirements
+    ``"<name> @ git+URL@<40-hex>"`` — both regexes are intentionally narrow
+    to avoid accidental replacements in unrelated TOML sections.
     """
     text = pyproject_path.read_text()
     for pkg, new_sha in bumps.items():
@@ -136,14 +194,24 @@ def rewrite_revs(pyproject_path: Path, bumps: dict[str, str]) -> None:
             rf'^(\s*{re.escape(pkg)}\s*=\s*\{{.*?\brev\s*=\s*")[0-9a-f]{{40}}(".*\}}.*)$',
             re.MULTILINE,
         )
-        m = pattern.search(text)
-        if m is None:
+        # Match: "<pkg>[extras] @ git+<url>@<40-hex>..." (every occurrence,
+        # so the same package pinned in several groups stays coherent)
+        direct_pattern = re.compile(
+            rf"""(["']\s*{re.escape(pkg)}\s*(?:\[[^\]]*\])?\s*@\s*git\+[^"'\s]*?@)"""
+            rf"""[0-9a-f]{{40}}(?=["'#;\s])"""
+        )
+        found = False
+        if pattern.search(text) is not None:
+            found = True
+            text = pattern.sub(rf"\g<1>{new_sha}\g<2>", text, count=1)
+        if direct_pattern.search(text) is not None:
+            found = True
+            text = direct_pattern.sub(rf"\g<1>{new_sha}", text)
+        if not found:
             print(
                 f"::warning::Could not locate rev for {pkg} in pyproject.toml — skipping rewrite",
                 file=sys.stderr,
             )
-            continue
-        text = pattern.sub(rf"\g<1>{new_sha}\g<2>", text, count=1)
     pyproject_path.write_text(text)
 
 
@@ -180,7 +248,9 @@ def per_repo(pyproject_path: Path, filter_packages: list[str] | None = None) -> 
     """
     sources = parse_git_sources(pyproject_path)
     if not sources:
-        print("No git-sourced pins found in [tool.uv.sources].")
+        print(
+            "No git-sourced pins found in [tool.uv.sources] or direct-URL dependencies."
+        )
         return 0
 
     # Apply package filter if given
@@ -231,6 +301,9 @@ def _collect_fleet_pins(
 ) -> tuple[dict[str, list[tuple[str, str, str]]], list[str], list[str]]:
     """Enumerate fleet repos and collect all git-sourced pins.
 
+    Both ``[tool.uv.sources]`` git pins and PEP 508 direct-URL git pins
+    (``name @ git+URL@<sha>``) are collected.
+
     Returns ``(dep_map, skipped_repos, all_fleet_repos)`` where *dep_map*
     maps ``git_url → [(repo_name, pkg_name, current_rev)]``,
     *skipped_repos* lists repos that have no git-sourced pins, and
@@ -279,15 +352,10 @@ def _collect_fleet_pins(
             skipped_repos.append(repo)
             continue
 
-        raw = data.get("tool", {}).get("uv", {}).get("sources", {})
-        has_git_pin = False
-        for pkg, spec in raw.items():
-            if isinstance(spec, dict) and "git" in spec:
-                rev = spec.get("rev")
-                if rev and isinstance(rev, str) and len(rev) == 40:
-                    has_git_pin = True
-                    dep_map.setdefault(spec["git"], []).append((repo, pkg, rev))
-        if not has_git_pin:
+        pins = _extract_git_pins(data)
+        for pkg, git_url, rev in pins:
+            dep_map.setdefault(git_url, []).append((repo, pkg, rev))
+        if not pins:
             skipped_repos.append(repo)
 
     return dep_map, skipped_repos, repo_names
@@ -428,7 +496,8 @@ def _get_fleet_dep_bumps(
                 for pin_repo, pkg_name, current_rev in pins:
                     if pin_repo == repo and current_rev != new_sha:
                         bumps.append((pkg_name, new_sha))
-                break
+                # No break: the same dependency may be listed under several
+                # raw URLs (e.g. ``…/repo.git`` and ``…/repo``).
     return bumps
 
 
@@ -560,11 +629,26 @@ def _write_sweep_summary(
     skipped: list[str],
     unresolved_urls: list[tuple[str, str]],
     skipped_cycles: list[tuple[str, str]] | None = None,
+    planned: dict[str, list[tuple[str, str]]] | None = None,
 ) -> None:
-    """Write the sweep summary to stdout and ``$GITHUB_STEP_SUMMARY``."""
+    """Write the sweep summary to stdout and ``$GITHUB_STEP_SUMMARY``.
+
+    *planned* (dry-run only) maps repo → ``[(pkg, new_sha)]`` bumps that
+    would be applied.
+    """
     lines: list[str] = []
     lines.append("## Pin Bump Sweep Summary")
     lines.append("")
+
+    if planned is not None:
+        lines.append(f"### Planned bumps — dry run ({len(planned)})")
+        if planned:
+            for r in sorted(planned):
+                pins = ", ".join(f"`{pkg}` → `{sha[:8]}`" for pkg, sha in planned[r])
+                lines.append(f"- {owner}/{r}: {pins}")
+        else:
+            lines.append("(none)")
+        lines.append("")
 
     if bumped:
         lines.append(f"### Bumped ({len(bumped)})")
@@ -634,8 +718,11 @@ def _write_sweep_summary(
 # ---------------------------------------------------------------------------
 
 
-def sweep(owner: str, token_env: str) -> int:
+def sweep(owner: str, token_env: str, dry_run: bool = False) -> int:
     """Enumerate fleet repos, resolve pins once, open PRs for affected repos.
+
+    With *dry_run*, stop after computing the stale pins: report the planned
+    bumps in the summary without cloning, pushing or opening PRs.
 
     Repos are processed in topological order so that a dependent always
     pins a commit whose own first-party pins already match.  Repos
@@ -657,7 +744,9 @@ def sweep(owner: str, token_env: str) -> int:
             print(f"Skipped {len(skipped_repos)} repo(s) with no git pins:")
             for r in skipped_repos:
                 print(f"  - {owner}/{r}")
-        _write_sweep_summary(owner, [], [], skipped_repos, [], [])
+        _write_sweep_summary(
+            owner, [], [], skipped_repos, [], [], {} if dry_run else None
+        )
         return 0
 
     latest_map, unresolved_urls = _resolve_latest_shas(dep_map)
@@ -665,7 +754,19 @@ def sweep(owner: str, token_env: str) -> int:
     repo_bumps = _compute_repo_bumps(dep_map, latest_map)
     if not repo_bumps:
         print("All fleet pins are already current.")
-        _write_sweep_summary(owner, [], [], skipped_repos, unresolved_urls, [])
+        _write_sweep_summary(
+            owner, [], [], skipped_repos, unresolved_urls, [], {} if dry_run else None
+        )
+        return 0
+
+    if dry_run:
+        print(f"\nDry run — {len(repo_bumps)} repo(s) would get pin bumps:")
+        for repo in sorted(repo_bumps):
+            for pkg, sha in repo_bumps[repo]:
+                print(f"  {owner}/{repo}: {pkg} → {sha[:8]}")
+        _write_sweep_summary(
+            owner, [], [], skipped_repos, unresolved_urls, [], repo_bumps
+        )
         return 0
 
     # Build first-party dependency graph and topologically sort so that
@@ -768,6 +869,11 @@ def main() -> None:
     s.add_argument(
         "--token-env", default="SWEEP_TOKEN", help="Env var holding the GitHub token"
     )
+    s.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Report planned bumps without cloning, pushing or opening PRs",
+    )
 
     args = parser.parse_args()
 
@@ -779,7 +885,7 @@ def main() -> None:
         sys.exit(per_repo(pyproject, args.packages))
 
     elif args.mode == "sweep":
-        sys.exit(sweep(args.owner, args.token_env))
+        sys.exit(sweep(args.owner, args.token_env, dry_run=args.dry_run))
 
 
 if __name__ == "__main__":
