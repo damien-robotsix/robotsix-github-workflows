@@ -46,6 +46,23 @@ on:
         required: false
         type: string
         default: "sha-pin,persist-credentials,static-defaults"
+      trivyignore:
+        description: >-
+          Path (relative to the repository root) of a `.trivyignore` whose
+          suppressions must carry `# expires: YYYY-MM-DD` annotations, e.g.
+          ".trivyignore". The job fails once any entry's expiry date is
+          reached. Empty (the default) skips the check.
+        required: false
+        type: string
+        default: ""
+      trivyignore-missing-expiry:
+        description: >-
+          Policy for `.trivyignore` entries without an `# expires:`
+          annotation: "warn" (the default) annotates them without failing,
+          "fail" fails the job.
+        required: false
+        type: string
+        default: "warn"
 
 permissions:
   contents: read
@@ -133,6 +150,34 @@ jobs:
         env:
           WORKFLOW_RULES: ${{ inputs.workflow-rules }}
         run: python3 _workflow-lib/scripts/check_workflow_rules.py --rules "$WORKFLOW_RULES"
+
+  trivyignore-expiry:
+    name: Trivyignore expiry
+    if: ${{ inputs.trivyignore != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          persist-credentials: false
+
+      # The check script lives in THIS workflows repo, not the caller's
+      # checkout (see check-permissions above).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          repository: damien-robotsix/robotsix-github-workflows
+          ref: ${{ github.job_workflow_sha }}
+          path: _workflow-lib
+          persist-credentials: false
+
+      - name: Check .trivyignore suppression expiry
+        env:
+          TRIVYIGNORE: ${{ inputs.trivyignore }}
+          MISSING_EXPIRY: ${{ inputs.trivyignore-missing-expiry }}
+        run: |
+          python3 _workflow-lib/scripts/check_trivyignore_expiry.py \
+            --missing-expiry "$MISSING_EXPIRY" -- "$TRIVYIGNORE"
 
   actionlint:
     name: Actionlint
