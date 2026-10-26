@@ -62,22 +62,22 @@ on:
       trivy-db-repository:
         description: >
           OCI repository Trivy downloads its vulnerability DB from, exported
-          as `TRIVY_DB_REPOSITORY` to every Trivy step. Defaults to the
-          ghcr.io mirror, which is faster fleet-wide and avoids the
-          mirror.gcr.io download hanging on self-hosted runners. Set to an
-          empty string to fall back to Trivy's built-in default.
+          as `TRIVY_DB_REPOSITORY` to every Trivy step. Defaults to empty,
+          which leaves Trivy on its built-in default source. Opt in to the
+          ghcr.io mirror (`ghcr.io/aquasecurity/trivy-db:2`), e.g. to avoid
+          the mirror.gcr.io download hanging on self-hosted runners.
         required: false
         type: string
-        default: "ghcr.io/aquasecurity/trivy-db:2"
+        default: ""
       trivy-java-db-repository:
         description: >
           OCI repository Trivy downloads its Java DB from, exported as
-          `TRIVY_JAVA_DB_REPOSITORY` to every Trivy step. Defaults to the
-          ghcr.io mirror. Set to an empty string to fall back to Trivy's
-          built-in default.
+          `TRIVY_JAVA_DB_REPOSITORY` to every Trivy step. Defaults to empty,
+          which leaves Trivy on its built-in default source. Opt in to the
+          ghcr.io mirror with `ghcr.io/aquasecurity/trivy-java-db:1`.
         required: false
         type: string
-        default: "ghcr.io/aquasecurity/trivy-java-db:1"
+        default: ""
       upload-sarif:
         description: >
           Whether to run the Trivy SARIF scan and upload it to GitHub Code
