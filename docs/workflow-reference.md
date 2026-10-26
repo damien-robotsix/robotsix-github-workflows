@@ -94,8 +94,8 @@ No inputs.  No secrets.
 | `smoke_command` | string | `""` | Command run inside the image via `sh -c` (e.g. `python -c "import mypkg"`). When empty, execs the image's own entrypoint/CMD binary with `--help`. |
 | `strip-pip` | boolean | `true` | Hardening layer uninstalls pip (and its site-packages/bin leftovers) from any python3 in the image — the base image's pip vendors a certifi that trips the Trivy gate. Set `false` for images that need pip at runtime; images without python are unaffected. |
 | `runs-on` | string | `ubuntu-latest` | Runner label for the job, e.g. `self-hosted` for zero billed minutes. |
-| `trivy-db-repository` | string | `ghcr.io/aquasecurity/trivy-db:2` | Exported as `TRIVY_DB_REPOSITORY` to every Trivy step. The ghcr.io mirror avoids the mirror.gcr.io download hanging on self-hosted runners; set `""` for Trivy's built-in default. |
-| `trivy-java-db-repository` | string | `ghcr.io/aquasecurity/trivy-java-db:1` | Exported as `TRIVY_JAVA_DB_REPOSITORY` to every Trivy step; set `""` for Trivy's built-in default. |
+| `trivy-db-repository` | string | `""` | Exported as `TRIVY_DB_REPOSITORY` to every Trivy step. Empty uses Trivy's built-in default source; opt in to the ghcr.io mirror with `ghcr.io/aquasecurity/trivy-db:2` (avoids the mirror.gcr.io download hanging on self-hosted runners). |
+| `trivy-java-db-repository` | string | `""` | Exported as `TRIVY_JAVA_DB_REPOSITORY` to every Trivy step. Empty uses Trivy's built-in default source; opt in to the ghcr.io mirror with `ghcr.io/aquasecurity/trivy-java-db:1`. |
 | `upload-sarif` | boolean | `true` | Run the Trivy SARIF scan and upload it to Code Scanning. Always skipped for private repositories (code-scanning upload requires GitHub Advanced Security). |
 | `trivyignores` | string | `.trivyignore` | Trivy ignore file passed explicitly to both the gate and the SARIF scans. Skipped when the file does not exist. |
 | `build-args` | string | `""` | Newline-separated `NAME=value` build args for the component Dockerfile build. Not for secrets (recorded in image history). |
@@ -123,8 +123,8 @@ skip the cache entirely.
 | `smoke_command` | string | `""` | Command run inside the image via `sh -c` (e.g. `python -c "import mypkg"`). When empty, execs the image's own entrypoint/CMD binary with `--help`. |
 | `strip-pip` | boolean | `true` | Hardening layer uninstalls pip (and its site-packages/bin leftovers) from any python3 in the image — the base image's pip vendors a certifi that trips the Trivy gate. Set `false` for images that need pip at runtime; images without python are unaffected. |
 | `runs-on` | string | `ubuntu-latest` | Runner label for the job, e.g. `self-hosted` for zero billed minutes. |
-| `trivy-db-repository` | string | `ghcr.io/aquasecurity/trivy-db:2` | Exported as `TRIVY_DB_REPOSITORY` to every Trivy step. The ghcr.io mirror avoids the mirror.gcr.io download hanging on self-hosted runners; set `""` for Trivy's built-in default. |
-| `trivy-java-db-repository` | string | `ghcr.io/aquasecurity/trivy-java-db:1` | Exported as `TRIVY_JAVA_DB_REPOSITORY` to every Trivy step; set `""` for Trivy's built-in default. |
+| `trivy-db-repository` | string | `""` | Exported as `TRIVY_DB_REPOSITORY` to every Trivy step. Empty uses Trivy's built-in default source; opt in to the ghcr.io mirror with `ghcr.io/aquasecurity/trivy-db:2` (avoids the mirror.gcr.io download hanging on self-hosted runners). |
+| `trivy-java-db-repository` | string | `""` | Exported as `TRIVY_JAVA_DB_REPOSITORY` to every Trivy step. Empty uses Trivy's built-in default source; opt in to the ghcr.io mirror with `ghcr.io/aquasecurity/trivy-java-db:1`. |
 | `upload-sarif` | boolean | `true` | Run the Trivy SARIF scan and upload it to Code Scanning. Always skipped for private repositories (code-scanning upload requires GitHub Advanced Security). |
 | `trivyignores` | string | `.trivyignore` | Trivy ignore file passed explicitly to both the gate and the SARIF scans. Skipped when the file does not exist. |
 | `build-args` | string | `""` | Newline-separated `NAME=value` build args for the component Dockerfile build. Not for secrets (recorded in image history). |
