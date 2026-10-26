@@ -20,7 +20,6 @@ set -euo pipefail
 #   scripts/apply-branch-protection.sh repo-a repo-b  # specific repos
 #   scripts/apply-branch-protection.sh --dry-run    # preview only
 #   CHECKS="ctx1,ctx2" scripts/apply-branch-protection.sh  # override checks
-#   BYPASS_APP_ID=12345 scripts/apply-branch-protection.sh  # add bypass actor
 # ============================================================================
 
 # --- Configuration ---------------------------------------------------------
@@ -28,10 +27,19 @@ OWNER="${OWNER:-damien-robotsix}"
 DRY_RUN=false
 REPOS=()
 
-# Optional GitHub App ID added as a ruleset bypass actor so the release
-# App can direct-push to main.  Set to the numeric App ID (not the
-# installation ID).  When empty or unset, no bypass actor is configured.
-BYPASS_APP_ID="${BYPASS_APP_ID:-}"
+# No bypass actors, ever.  The ruleset used to accept BYPASS_APP_ID to list
+# the fleet GitHub App as an `always` bypass actor so auto-release.yml could
+# direct-push to main.  That bypass also let every bot merge skip the required
+# status checks: on 2026-10-25 a chat agent merged a PR whose Tests check had
+# been red for hours (robotsix-chat #2208) and main went red.  The bypass is
+# gone; auto-release.yml already falls back to PR + auto-merge on a protected
+# branch.  Refuse the variable outright so a rerun can't quietly bring it back.
+if [[ -n "${BYPASS_APP_ID:-}" ]]; then
+  echo "ERROR: BYPASS_APP_ID is no longer supported — the fleet ruleset has no" >&2
+  echo "       bypass actors (a bypassing App can merge PRs with red checks)." >&2
+  echo "       Unset it and re-run.  See docs/branch-protection.md." >&2
+  exit 2
+fi
 
 # Known shared-workflow gate job names (matched case-insensitively).
 # Required check contexts are derived per repo by inspecting actual
@@ -72,11 +80,10 @@ Environment:
   CHECKS          Comma-separated list of exact status-check contexts.
                   Overrides the per-repo derivation.  Example:
                     CHECKS="Baseline Check / baseline,Python CI / tests"
-  BYPASS_APP_ID   Numeric GitHub App ID to add as a ruleset bypass
-                  actor.  When set, the App can direct-push to main
-                  (needed for auto-release.yml).  Leave unset for no
-                  bypass actor.  Example:
-                    BYPASS_APP_ID=123456
+
+The ruleset has NO bypass actors: Apps, bots and admins all go through
+PRs with green required checks.  (BYPASS_APP_ID was removed on
+2026-10-26 and is refused if set.)
 
 Required gh token scopes: repo, administration:write
 HELP
@@ -261,8 +268,8 @@ apply_repo_settings() {
 #   - Linear history required
 #   - No force-pushes, no branch deletion
 #
-# If BYPASS_APP_ID is set, the designated GitHub App is added as a
-# bypass actor so it can push releases directly to main.
+# The ruleset carries an explicit EMPTY bypass_actors list so that
+# re-running the script strips any bypass actor added by hand.
 #
 # Classic branch protection (if present) is removed after the ruleset
 # is applied, completing the migration from classic to rulesets.
@@ -282,14 +289,12 @@ apply_branch_protection() {
 
   # Build the ruleset JSON body via python3.  We pass the check names
   # as arguments (sys.argv[1:]) so they survive any special characters
-  # intact, and send the Python script via stdin.  BYPASS_APP_ID is
-  # forwarded through the environment.
+  # intact, and send the Python script via stdin.
   local body
-  body=$(BYPASS_APP_ID="${BYPASS_APP_ID:-}" python3 - "${checks[@]}" <<'PYEOF'
-import json, os, sys
+  body=$(python3 - "${checks[@]}" <<'PYEOF'
+import json, sys
 
 checks = sys.argv[1:]
-bypass_app_id = os.environ.get("BYPASS_APP_ID", "")
 
 rules = [
     # A non-null pull_request rule is what enforces "PRs required /
@@ -332,18 +337,11 @@ body = {
     "rules": rules
 }
 
-# The fleet auto-release.yml pushes commits and tags as a GitHub App.
-# Under classic branch protection an App cannot bypass; under rulesets
-# the App can be listed as a bypass actor, allowing direct pushes to
-# main without the PR+auto-merge fallback.
-if bypass_app_id:
-    body["bypass_actors"] = [
-        {
-            "actor_id": int(bypass_app_id),
-            "actor_type": "Integration",
-            "bypass_mode": "always"
-        }
-    ]
+# Explicitly empty: a bypass actor (the fleet GitHub App used to be one)
+# skips required status checks on PR merges too, not just the push rule,
+# which is how a red PR reached main on 2026-10-25.  Sending [] on every
+# PUT makes a re-run remove any actor added through the UI.
+body["bypass_actors"] = []
 
 print(json.dumps(body, indent=2))
 PYEOF
