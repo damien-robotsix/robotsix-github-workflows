@@ -80,6 +80,40 @@ on:
         required: false
         type: boolean
         default: true
+      trivyignores:
+        description: >
+          Trivy ignore file passed explicitly to both the gate and the SARIF
+          scans, relative to the repository root. When the file does not
+          exist it is skipped (no ignore file is passed), so repos without a
+          `.trivyignore` need not override the default.
+        required: false
+        type: string
+        default: ".trivyignore"
+      build-args:
+        description: >
+          Newline-separated `NAME=value` build arguments passed to the
+          component Dockerfile build (docker/build-push-action `build-args`).
+          Not for secrets — build args are recorded in the image history;
+          use the `build-secrets` secret instead.
+        required: false
+        type: string
+        default: ""
+      github-token-secret-id:
+        description: >
+          When non-empty, exposes the job's `GITHUB_TOKEN` to the component
+          Dockerfile build as a BuildKit secret with this id (consumed via
+          `RUN --mount=type=secret,id=<id>`). Empty (the default) passes no
+          token.
+        required: false
+        type: string
+        default: ""
+    secrets:
+      build-secrets:
+        description: >
+          Optional newline-separated `id=value` BuildKit secrets passed to
+          the component Dockerfile build (docker/build-push-action
+          `secrets`), consumed via `RUN --mount=type=secret,id=<id>`.
+        required: false
 
 permissions: {}
 
@@ -138,6 +172,10 @@ jobs:
           provenance: false
           sbom: false
           outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+          build-args: ${{ inputs.build-args }}
+          secrets: |
+            ${{ inputs.github-token-secret-id != '' && format('{0}={1}', inputs.github-token-secret-id, secrets.GITHUB_TOKEN) || '' }}
+            ${{ secrets.build-secrets }}
 
       # Read the base image's configured USER so the hardening layer can run
       # apt as root and then restore the original user, leaving runtime
@@ -229,6 +267,7 @@ jobs:
           exit-code: "1"
           severity: CRITICAL
           ignore-unfixed: true
+          trivyignores: ${{ hashFiles(inputs.trivyignores) != '' && inputs.trivyignores || '' }}
 
       # Code-scanning surface: separate Trivy run that emits SARIF for
       # all severities (no exit-code). The two steps MUST stay separate:
@@ -246,3 +285,4 @@ jobs:
         with:
           image-ref: ${{ steps.scan-ref.outputs.image }}
           ignore-unfixed: true
+          trivyignores: ${{ hashFiles(inputs.trivyignores) != '' && inputs.trivyignores || '' }}

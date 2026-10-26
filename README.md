@@ -145,9 +145,19 @@ jobs:
     #   dockerfile: ./docker/Dockerfile.prod
     #   image-name: ghcr.io/my-org/my-repo-sandbox
     #   use-gha-cache: false
+    #   trivyignores: .trivyignore          # default; skipped if absent
+    #   build-args: |
+    #     PYTHON_VERSION=3.14
+    #   github-token-secret-id: github_token  # RUN --mount=type=secret,id=github_token
+    # Optional extra BuildKit secrets (id=value lines):
+    # secrets:
+    #   build-secrets: |
+    #     npm_token=${{ secrets.NPM_TOKEN }}
 ```
 
-The workflow automatically respects `.trivyignore` in the repository root for suppressing known false positives.
+The `trivyignores` file (default `.trivyignore` in the repository root) is passed
+explicitly to both the gating and the SARIF Trivy scans for suppressing known
+false positives; it is skipped when the file does not exist.
 
 See [Workflow Reference](docs/workflow-reference.md) for all inputs and defaults, including
 `use-gha-cache` timing notes.
@@ -342,7 +352,15 @@ jobs:
     # with:
     #   dockerfile: ./docker/Dockerfile.prod
     #   image-name: ghcr.io/my-org/my-repo-sandbox
+    #   trivyignores: .trivyignore          # default; skipped if absent
+    #   build-args: |
+    #     PYTHON_VERSION=3.14
+    #   github-token-secret-id: github_token  # RUN --mount=type=secret,id=github_token
     secrets: inherit
+    # Or, to pass extra BuildKit secrets (replaces `secrets: inherit`):
+    # secrets:
+    #   build-secrets: |
+    #     npm_token=${{ secrets.NPM_TOKEN }}
 ```
 
 The `packages: write`, `id-token: write`, `attestations: write`, and `security-events: write` permissions are declared inside the reusable workflow and do not need to be re-declared in the caller. Secrets are passed via `secrets: inherit` so `GITHUB_TOKEN` is available for GHCR login.

@@ -97,8 +97,15 @@ No inputs.  No secrets.
 | `trivy-db-repository` | string | `ghcr.io/aquasecurity/trivy-db:2` | Exported as `TRIVY_DB_REPOSITORY` to every Trivy step. The ghcr.io mirror avoids the mirror.gcr.io download hanging on self-hosted runners; set `""` for Trivy's built-in default. |
 | `trivy-java-db-repository` | string | `ghcr.io/aquasecurity/trivy-java-db:1` | Exported as `TRIVY_JAVA_DB_REPOSITORY` to every Trivy step; set `""` for Trivy's built-in default. |
 | `upload-sarif` | boolean | `true` | Run the Trivy SARIF scan and upload it to Code Scanning. Always skipped for private repositories (code-scanning upload requires GitHub Advanced Security). |
+| `trivyignores` | string | `.trivyignore` | Trivy ignore file passed explicitly to both the gate and the SARIF scans. Skipped when the file does not exist. |
+| `build-args` | string | `""` | Newline-separated `NAME=value` build args for the component Dockerfile build. Not for secrets (recorded in image history). |
+| `github-token-secret-id` | string | `""` | When set, exposes the job's `GITHUB_TOKEN` to the component Dockerfile build as a BuildKit secret with this id (`RUN --mount=type=secret,id=<id>`). |
 
-No secrets (uses `GITHUB_TOKEN` via caller workflow).
+| Secret | Required | Description |
+|---|---|---|
+| `build-secrets` | no | Newline-separated `id=value` BuildKit secrets for the component Dockerfile build (`RUN --mount=type=secret,id=<id>`). |
+
+`GITHUB_TOKEN` is always available to the reusable workflow; no `secrets: inherit` needed.
 
 The GHA layer cache (`cache-from`/`cache-to`) is enabled by default. For
 large images (multi-GB), exporting layers to the GHA cache API can add
@@ -119,8 +126,16 @@ skip the cache entirely.
 | `trivy-db-repository` | string | `ghcr.io/aquasecurity/trivy-db:2` | Exported as `TRIVY_DB_REPOSITORY` to every Trivy step. The ghcr.io mirror avoids the mirror.gcr.io download hanging on self-hosted runners; set `""` for Trivy's built-in default. |
 | `trivy-java-db-repository` | string | `ghcr.io/aquasecurity/trivy-java-db:1` | Exported as `TRIVY_JAVA_DB_REPOSITORY` to every Trivy step; set `""` for Trivy's built-in default. |
 | `upload-sarif` | boolean | `true` | Run the Trivy SARIF scan and upload it to Code Scanning. Always skipped for private repositories (code-scanning upload requires GitHub Advanced Security). |
+| `trivyignores` | string | `.trivyignore` | Trivy ignore file passed explicitly to both the gate and the SARIF scans. Skipped when the file does not exist. |
+| `build-args` | string | `""` | Newline-separated `NAME=value` build args for the component Dockerfile build. Not for secrets (recorded in image history). |
+| `github-token-secret-id` | string | `""` | When set, exposes the job's `GITHUB_TOKEN` to the component Dockerfile build as a BuildKit secret with this id (`RUN --mount=type=secret,id=<id>`). |
 
-No explicit secrets input (callers pass `secrets: inherit`).
+| Secret | Required | Description |
+|---|---|---|
+| `build-secrets` | no | Newline-separated `id=value` BuildKit secrets for the component Dockerfile build (`RUN --mount=type=secret,id=<id>`). |
+
+Callers either pass `secrets: inherit` or, to supply `build-secrets`, an explicit
+`secrets:` map (the two are mutually exclusive). `GITHUB_TOKEN` is always available.
 
 ## `lint-workflows.yml`
 
