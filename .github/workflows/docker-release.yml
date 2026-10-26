@@ -45,18 +45,57 @@ on:
         required: false
         type: boolean
         default: true
+      runs-on:
+        description: >
+          Runner label for the job (e.g. `self-hosted` for zero billed
+          minutes). Defaults to `ubuntu-latest`.
+        required: false
+        type: string
+        default: "ubuntu-latest"
+      trivy-db-repository:
+        description: >
+          OCI repository Trivy downloads its vulnerability DB from, exported
+          as `TRIVY_DB_REPOSITORY` to every Trivy step. Defaults to the
+          ghcr.io mirror, which is faster fleet-wide and avoids the
+          mirror.gcr.io download hanging on self-hosted runners. Set to an
+          empty string to fall back to Trivy's built-in default.
+        required: false
+        type: string
+        default: "ghcr.io/aquasecurity/trivy-db:2"
+      trivy-java-db-repository:
+        description: >
+          OCI repository Trivy downloads its Java DB from, exported as
+          `TRIVY_JAVA_DB_REPOSITORY` to every Trivy step. Defaults to the
+          ghcr.io mirror. Set to an empty string to fall back to Trivy's
+          built-in default.
+        required: false
+        type: string
+        default: "ghcr.io/aquasecurity/trivy-java-db:1"
+      upload-sarif:
+        description: >
+          Whether to run the Trivy SARIF scan and upload it to GitHub Code
+          Scanning. The upload is always skipped for private repositories
+          (code-scanning upload is rejected without GitHub Advanced
+          Security), regardless of this input.
+        required: false
+        type: boolean
+        default: true
 
 permissions: {}
 
 jobs:
   publish:
     name: Publish
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
     env:
       # Resolved once so the metadata, by-digest push and hardening base ref
       # all agree. Cannot be a workflow_call input default (Rule 5: dynamic
       # defaults are rejected), so it is computed here.
       IMAGE_NAME: ${{ inputs.image-name != '' && inputs.image-name || format('ghcr.io/{0}', github.repository) }}
+      # Trivy DB mirrors, read by every Trivy step (gate and SARIF). Empty
+      # values are ignored by Trivy, which then uses its built-in default.
+      TRIVY_DB_REPOSITORY: ${{ inputs.trivy-db-repository }}
+      TRIVY_JAVA_DB_REPOSITORY: ${{ inputs.trivy-java-db-repository }}
     permissions:
       contents: read
       packages: write         # required to push images to ghcr.io
@@ -199,7 +238,10 @@ jobs:
       # ALL severities and fail on HIGH/MEDIUM findings the gate is
       # supposed to ignore. `if: always()` so we still surface findings
       # in the Security tab even when the gate above trips.
+      # Skipped for private repos: code-scanning upload is rejected without
+      # GitHub Advanced Security, so the scan + upload would be wasted work.
       - name: Trivy vulnerability scan (SARIF for code-scanning)
+        if: ${{ inputs.upload-sarif && !github.event.repository.private }}
         uses: damien-robotsix/robotsix-github-workflows/.github/actions/trivy-sarif@41b2b7f12c390ceb135effe8440ad8f3ef7e9940
         with:
           image-ref: ${{ steps.scan-ref.outputs.image }}
