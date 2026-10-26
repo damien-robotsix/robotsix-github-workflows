@@ -1335,3 +1335,187 @@ class TestSweep:
         # leaf was attempted but failed; consumer was skipped
         assert "leaf" in apply_calls
         assert "consumer" not in apply_calls
+
+
+# ---------------------------------------------------------------------------
+# PEP 508 direct-URL git pins (``name @ git+URL@<sha>``)
+# ---------------------------------------------------------------------------
+
+
+class TestDirectUrlGitPins:
+    def test_parse_project_dependencies(self, tmp_pyproject: Path) -> None:
+        sha = "a" * 40
+        _write_toml(
+            tmp_pyproject,
+            f"""
+            [project]
+            name = "board"
+            dependencies = [
+                "httpx>=0.27",
+                "robotsix-modules @ git+https://github.com/org/robotsix-modules.git@{sha}",
+            ]
+            """,
+        )
+        assert parse_git_sources(tmp_pyproject) == {
+            "robotsix-modules": {
+                "git": "https://github.com/org/robotsix-modules.git",
+                "rev": sha,
+            }
+        }
+
+    def test_parse_optional_and_groups_with_extras_and_markers(
+        self, tmp_pyproject: Path
+    ) -> None:
+        sha1, sha2 = "b" * 40, "c" * 40
+        _write_toml(
+            tmp_pyproject,
+            f"""
+            [project]
+            name = "x"
+            dependencies = []
+
+            [project.optional-dependencies]
+            extra = ["opt-pkg[cli] @ git+https://github.com/org/opt.git@{sha1} ; python_version >= '3.11'"]
+
+            [dependency-groups]
+            dev = [
+                {{ include-group = "lint" }},
+                "dev-pkg @ git+ssh://git@github.com/org/dev.git@{sha2}#subdirectory=pkg",
+            ]
+            lint = ["ruff"]
+            """,
+        )
+        result = parse_git_sources(tmp_pyproject)
+        assert result["opt-pkg"] == {
+            "git": "https://github.com/org/opt.git",
+            "rev": sha1,
+        }
+        assert result["dev-pkg"] == {
+            "git": "ssh://git@github.com/org/dev.git",
+            "rev": sha2,
+        }
+
+    def test_branch_or_short_ref_skipped(self, tmp_pyproject: Path) -> None:
+        _write_toml(
+            tmp_pyproject,
+            """
+            [project]
+            name = "x"
+            dependencies = [
+                "a @ git+https://github.com/org/a.git@main",
+                "b @ git+https://github.com/org/b.git@abc123",
+                "c @ git+https://github.com/org/c.git",
+            ]
+            """,
+        )
+        assert parse_git_sources(tmp_pyproject) == {}
+
+    def test_rewrite_direct_url_pin(self, tmp_pyproject: Path) -> None:
+        old_sha, new_sha = "0" * 40, "f" * 40
+        _write_toml(
+            tmp_pyproject,
+            f"""
+            [project]
+            name = "board"
+            dependencies = [
+                "robotsix-modules @ git+https://github.com/org/robotsix-modules.git@{old_sha}",
+                "other @ git+https://github.com/org/other.git@{old_sha}",
+            ]
+
+            [dependency-groups]
+            dev = ["robotsix-modules[test] @ git+https://github.com/org/robotsix-modules.git@{old_sha} ; python_version >= '3.11'"]
+            """,
+        )
+        rewrite_revs(tmp_pyproject, {"robotsix-modules": new_sha})
+        text = tmp_pyproject.read_text()
+        assert text.count(new_sha) == 2
+        assert f"other.git@{old_sha}" in text
+        assert parse_git_sources(tmp_pyproject)["robotsix-modules"]["rev"] == new_sha
+
+    def test_rewrite_both_shapes(self, tmp_pyproject: Path) -> None:
+        old_sha, new_sha = "1" * 40, "e" * 40
+        _write_toml(
+            tmp_pyproject,
+            f"""
+            [project]
+            name = "x"
+            dependencies = ["dep @ git+https://github.com/org/dep.git@{old_sha}"]
+
+            [tool.uv.sources]
+            src = {{ git = "https://github.com/org/src.git", rev = "{old_sha}" }}
+            """,
+        )
+        rewrite_revs(tmp_pyproject, {"dep": new_sha, "src": new_sha})
+        result = parse_git_sources(tmp_pyproject)
+        assert result["dep"]["rev"] == new_sha
+        assert result["src"]["rev"] == new_sha
+
+    def test_collect_fleet_pins_includes_direct_url(self, monkeypatch) -> None:
+        sha = "d" * 40
+        toml_content = textwrap.dedent(f"""
+            [project]
+            name = "board"
+            dependencies = ["robotsix-modules @ git+https://github.com/org/modules.git@{sha}"]
+        """).lstrip()
+
+        def fake_run(*args: str, **kwargs: object) -> subprocess.CompletedProcess[str]:
+            if args[:3] == ("gh", "repo", "list"):
+                return subprocess.CompletedProcess(
+                    args=args,
+                    returncode=0,
+                    stdout=json.dumps([{"name": "board"}]),
+                    stderr="",
+                )
+            return subprocess.run(args, text=True, check=True, **kwargs)  # type: ignore[call-overload,no-any-return]
+
+        def fake_gh(*args: str, **kwargs: object) -> str:
+            return base64.b64encode(toml_content.encode()).decode()
+
+        monkeypatch.setattr(_pin_bump, "run", fake_run)
+        monkeypatch.setattr(_pin_bump, "gh", fake_gh)
+        dep_map, skipped, _all = _collect_fleet_pins("test-org", {"GH_TOKEN": "x"})
+        assert dep_map == {
+            "https://github.com/org/modules.git": [("board", "robotsix-modules", sha)]
+        }
+        assert skipped == []
+
+    def test_sweep_dry_run_reports_direct_url_pin(
+        self, tmp_path: Path, monkeypatch, capsys
+    ) -> None:
+        dep_bare, head = _create_bare_repo(tmp_path)
+        stale = "0" * 40
+        toml_content = textwrap.dedent(f"""
+            [project]
+            name = "board"
+            dependencies = ["robotsix-modules @ git+file://{dep_bare}@{stale}"]
+        """).lstrip()
+        calls: list[tuple[str, ...]] = []
+
+        def fake_run(*args: str, **kwargs: object) -> subprocess.CompletedProcess[str]:
+            calls.append(args)
+            if args[:3] == ("gh", "repo", "list"):
+                return subprocess.CompletedProcess(
+                    args=args,
+                    returncode=0,
+                    stdout=json.dumps([{"name": "board"}]),
+                    stderr="",
+                )
+            if args[0] == "git" and args[1] == "ls-remote":
+                return subprocess.run(args, text=True, check=True, **kwargs)  # type: ignore[call-overload,no-any-return]
+            raise AssertionError(f"unexpected command in dry run: {args}")
+
+        def fake_gh(*args: str, **kwargs: object) -> str:
+            return base64.b64encode(toml_content.encode()).decode()
+
+        summary = tmp_path / "summary.md"
+        monkeypatch.setattr(_pin_bump, "run", fake_run)
+        monkeypatch.setattr(_pin_bump, "gh", fake_gh)
+        monkeypatch.setenv("SWEEP_TOKEN", "fake-token")
+        monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+
+        assert sweep("test-org", "SWEEP_TOKEN", dry_run=True) == 0
+        text = summary.read_text()
+        assert "### Planned bumps — dry run (1)" in text
+        assert f"- test-org/board: `robotsix-modules` → `{head[:8]}`" in text
+        assert "### Skipped — no git pins\n(none)" in text
+        assert not any(c[:2] == ("git", "clone") for c in calls)
