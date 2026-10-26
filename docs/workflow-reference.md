@@ -129,6 +129,7 @@ skip the cache entirely.
 | `trivyignores` | string | `.trivyignore` | Trivy ignore file passed explicitly to both the gate and the SARIF scans. Skipped when the file does not exist. |
 | `build-args` | string | `""` | Newline-separated `NAME=value` build args for the component Dockerfile build. Not for secrets (recorded in image history). |
 | `github-token-secret-id` | string | `""` | When set, exposes the job's `GITHUB_TOKEN` to the component Dockerfile build as a BuildKit secret with this id (`RUN --mount=type=secret,id=<id>`). |
+| `push-retries` | number | `3` | Extra attempts for the component base push-by-digest (Stage 1, only when its first push fails) and the hardened-image build+push (Stage 2) when they fail (e.g. GHCR's intermittent `unknown blob`), with a short back-off; already-uploaded blobs are reused. Must be 0–10; larger values are rejected. Retries stay inside the push steps, so the Trivy gate and attestations run once. `0` = single attempt. |
 
 | Secret | Required | Description |
 |---|---|---|
