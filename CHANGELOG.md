@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.3.0](https://github.com/damien-robotsix/robotsix-github-workflows/compare/v1.2.0...v1.3.0) (2026-10-26)
+
+
+### Features
+
+* Add a shared Dockerfile lint (hadolint) gate to robotsix-github-workflows (20261023T162500Z-add-a-shared-dockerfile-lint-hadolint-ga-5bf8) ([#237](https://github.com/damien-robotsix/robotsix-github-workflows/issues/237)) ([28c5e47](https://github.com/damien-robotsix/robotsix-github-workflows/commit/28c5e47597eb27790696ee5bdc2fdc7e1b62a082))
+* Ship a reusable workflow-conventions checker in robotsix-github-workflows (one checker instead of three) (20261024T165915Z-ship-a-reusable-workflow-conventions-che-338d) ([#239](https://github.com/damien-robotsix/robotsix-github-workflows/issues/239)) ([6bac0ad](https://github.com/damien-robotsix/robotsix-github-workflows/commit/6bac0ad7b760f04cdb905407b05e9bc0eddef919))
+* Single-source CVE audit-ignore list in robotsix-github-workflows (replace per-repo duplicated lists and mill's check_cve_ignore_sync.py) (20261025T133157Z-single-source-cve-audit-ignore-list-in-r-aece) ([#241](https://github.com/damien-robotsix/robotsix-github-workflows/issues/241)) ([7404036](https://github.com/damien-robotsix/robotsix-github-workflows/commit/7404036cb9a9c74f3f1a34e8ec4e022fb700c21b))
+
+
+### Bug Fixes
+
+* **branch-protection:** drop the GitHub App bypass actor from the fleet ruleset ([#242](https://github.com/damien-robotsix/robotsix-github-workflows/issues/242)) ([ff826ae](https://github.com/damien-robotsix/robotsix-github-workflows/commit/ff826aea1635a407b1d2a05403898dbc97c877ce))
+
 ## [1.2.0](https://github.com/damien-robotsix/robotsix-github-workflows/compare/v1.1.0...v1.2.0) (2026-10-23)
 
 
