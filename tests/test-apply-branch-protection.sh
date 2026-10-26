@@ -6,7 +6,7 @@
 #   - Correct JSON bodies for repo settings (squash-only, delete_branch_on_merge)
 #   - Correct JSON bodies for the ruleset (name, enforcement, check contexts)
 #   - CHECKS override short-circuits check derivation
-#   - BYPASS_APP_ID adds a bypass actor
+#   - bypass_actors is always an explicit empty list; BYPASS_APP_ID is refused
 #   - Derived checks from mock check-run names on main
 #   - Idempotency: re-running the script produces no errors
 set -euo pipefail
@@ -203,8 +203,8 @@ assert any(r["type"] == "deletion" for r in data.get("rules", []))
 # Non-fast-forward rule.
 assert any(r["type"] == "non_fast_forward" for r in data.get("rules", []))
 
-# No bypass actors (BYPASS_APP_ID not set).
-assert "bypass_actors" not in data, f"unexpected bypass_actors: {data.get('bypass_actors')}"
+# Explicit empty bypass_actors so a PUT strips hand-added actors.
+assert data.get("bypass_actors") == [], f"unexpected bypass_actors: {data.get('bypass_actors')}"
 
 print("OK")
 ' || { echo "FAIL: ruleset JSON validation failed" >&2; return 1; }
@@ -226,12 +226,13 @@ print("OK")
 }
 
 # ------------------------------------------------------------------
-# Test 2: BYPASS_APP_ID — validates that setting BYPASS_APP_ID adds
-# a bypass_actors array to the ruleset JSON.
+# Test 2: BYPASS_APP_ID is refused — a bypass actor lets bot merges skip
+# the required status checks (chat #2208, 2026-10-25), so the script must
+# exit non-zero before touching anything when the variable is set.
 # ------------------------------------------------------------------
 test_bypass_app_id() {
     echo ""
-    echo "=== Test 2: BYPASS_APP_ID ==="
+    echo "=== Test 2: BYPASS_APP_ID refused ==="
 
     local tmpdir
     tmpdir=$(mktemp -d)
@@ -241,39 +242,26 @@ test_bypass_app_id() {
     local old_path="$PATH"
     export PATH="$tmpdir:$PATH"
 
-    local output
+    local output rc=0
     output=$(BYPASS_APP_ID=99999 CHECKS="baseline" \
-        "$REPO_ROOT/scripts/apply-branch-protection.sh" --dry-run test-repo 2>&1) || {
-        echo "FAIL: script exited non-zero: $output" >&2
-        PATH="$old_path" return 1
-    }
+        "$REPO_ROOT/scripts/apply-branch-protection.sh" --dry-run test-repo 2>&1) || rc=$?
 
     PATH="$old_path"
 
-    local ruleset_json
-    ruleset_json=$(extract_json_body "$output" "POST.*rulesets")
-
-    if [[ -z "$ruleset_json" ]]; then
-        echo "FAIL: no ruleset JSON body found" >&2
+    if [[ "$rc" -eq 0 ]]; then
+        echo "FAIL: script accepted BYPASS_APP_ID (exit 0): $output" >&2
+        return 1
+    fi
+    if ! grep -q "BYPASS_APP_ID is no longer supported" <<<"$output"; then
+        echo "FAIL: missing refusal message: $output" >&2
+        return 1
+    fi
+    if grep -q "rulesets" <<<"$output"; then
+        echo "FAIL: script reached the ruleset call despite BYPASS_APP_ID: $output" >&2
         return 1
     fi
 
-    validate_json "$ruleset_json" '
-import json, sys
-data = json.load(sys.stdin)
-
-bypass = data.get("bypass_actors")
-assert bypass is not None, "bypass_actors missing"
-assert len(bypass) == 1, f"expected 1 bypass actor, got {len(bypass)}"
-actor = bypass[0]
-assert actor["actor_id"] == 99999, f"actor_id mismatch: {actor['actor_id']}"
-assert actor["actor_type"] == "Integration", f"actor_type mismatch: {actor['actor_type']}"
-assert actor["bypass_mode"] == "always", f"bypass_mode mismatch: {actor['bypass_mode']}"
-
-print("OK")
-' || { echo "FAIL: bypass_actors validation failed" >&2; return 1; }
-
-    echo "PASS: BYPASS_APP_ID adds bypass actor"
+    echo "PASS: BYPASS_APP_ID is refused before any API call"
     return 0
 }
 

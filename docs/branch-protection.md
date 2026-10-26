@@ -23,20 +23,23 @@ re-run any number of times.  It enforces:
   `required_approving_review_count` to `0` so the fleet's automated
   auto-release and Dependabot auto-merge flows still function without a human
   reviewer in the loop.
-- **Optional App bypass** — when `BYPASS_APP_ID` is set, the designated GitHub
-  App is added as an `always` bypass actor.  This allows the fleet's
-  `auto-release.yml` (authenticated as a GitHub App) to direct-push release
-  commits and tags to `main`, eliminating the PR+auto-merge fallback that
-  classic branch protection required.  Without `BYPASS_APP_ID`, no bypass
-  actor is configured and *everyone* must go through PRs.
+- **No bypass actors** — the ruleset is written with an explicit empty
+  `bypass_actors` list, so re-running the script also strips any actor added
+  through the GitHub UI.  Until 2026-10-26 the fleet GitHub App was an
+  `always` bypass actor (via the removed `BYPASS_APP_ID` option) so that
+  `auto-release.yml` could direct-push release commits.  A bypass actor also
+  skips **required status checks on PR merges**, and on 2026-10-25 a chat
+  agent merged robotsix-chat #2208 with its Tests check red, turning `main`
+  red.  `auto-release.yml` already falls back to a PR + auto-merge when the
+  direct push is rejected, so nothing needs the bypass.  Setting
+  `BYPASS_APP_ID` now makes the script exit with an error.
 
 **Behaviour change from classic protection:** Under classic branch protection
 `enforce_admins: false` allowed repository admins to push directly to `main`
 (e.g. for emergency hotfixes).  Repository rulesets apply to *everyone* by
-default, and this migration does **not** add an admin bypass actor — only the
-release App (when `BYPASS_APP_ID` is set) can bypass.  Human admins must now
-go through PRs like everyone else.  This is an intentional, operator-approved
-tightening.
+default, and this ruleset has **no** bypass actor at all — not admins, not the
+fleet GitHub App.  Humans and bots go through PRs with green required checks.
+This is an intentional, operator-approved tightening.
 
 ## Usage
 
@@ -53,9 +56,6 @@ scripts/apply-branch-protection.sh --dry-run
 # Override the derived required-check set:
 CHECKS="Baseline Check / baseline,Python CI / tests" \
   scripts/apply-branch-protection.sh my-repo
-
-# Add a GitHub App bypass actor so auto-release can direct-push to main:
-BYPASS_APP_ID=123456 scripts/apply-branch-protection.sh my-repo
 ```
 
 ## When to run
@@ -77,7 +77,7 @@ is currently unprotected, which violates the repo-baseline it hosts for the
 fleet.  Run once after deploying the updated script:
 
 ```bash
-BYPASS_APP_ID=<release-app-id> scripts/apply-branch-protection.sh robotsix-github-workflows
+scripts/apply-branch-protection.sh robotsix-github-workflows
 ```
 
 ## Required `gh` auth scopes
@@ -99,4 +99,7 @@ clearly and continues to the next repo.
 |---|---|
 | `--dry-run` | Print the intended `gh api` calls and JSON bodies; no mutations are performed. |
 | `CHECKS=…` | Comma-separated list of exact status-check contexts (e.g. `"Baseline Check / baseline,Python CI / tests"`).  Skips per-repo derivation entirely.  Use when you know the exact set of required contexts for a repo. |
-| `BYPASS_APP_ID=…` | Numeric GitHub App ID added as a ruleset bypass actor.  The App can direct-push to `main` (bypasses the `pull_request` rule and required status checks), needed for `auto-release.yml`.  Leave unset for no bypass actor — then *everyone* must go through PRs. |
+
+`BYPASS_APP_ID` is **refused** (exit 2).  A bypass actor skips required
+status checks on PR merges, not only the direct-push rule — see the
+"No bypass actors" bullet above.
