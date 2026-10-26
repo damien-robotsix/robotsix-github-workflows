@@ -631,7 +631,7 @@ jobs:
   bump:
     uses: damien-robotsix/robotsix-github-workflows/.github/workflows/pin-bump.yml@<sha>
     with:
-      packages: "robotsix-mill robotsix-llmio"  # space-separated subset of [tool.uv.sources] names; omit for all
+      packages: "robotsix-mill robotsix-llmio"  # space-separated subset of git-pinned names (`[tool.uv.sources]` or PEP 508 `name @ git+URL@<sha>`); omit for all
       app-id: "3752211"  # fleet GitHub App
     secrets:
       app-private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}  # GitHub App private key

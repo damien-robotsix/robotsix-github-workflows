@@ -222,6 +222,13 @@ No secrets.
 |---|---|---|
 | `app-private-key` | yes | GitHub App private key. |
 
+`scripts/pin-bump.py` bumps two shapes of SHA-pinned git source: entries in
+`[tool.uv.sources]` with a 40-char `rev`, and PEP 508 direct-URL requirements
+`name @ git+URL@<40-hex>` in `[project.dependencies]`,
+`[project.optional-dependencies]` or `[dependency-groups]`. Branch, tag and
+short-SHA refs are not pins and are left alone. Both shapes are rewritten
+in place and the lock is regenerated with `uv lock`.
+
 ## `pin-bump-sweep.yml`
 
 | Input | Type | Default | Description |
@@ -233,6 +240,12 @@ No secrets.
 | Secret | Required | Description |
 |---|---|---|
 | `app-private-key` | yes | GitHub App private key. |
+
+The sweep collects the same git pins as `pin-bump.yml`, including PEP 508
+direct-URL pins (`name @ git+URL@<sha>`), so a repo that pins a fleet sibling
+that way is bumped together with its consumers. The sweep script's `--dry-run`
+flag (summary only, no clones, pushes or PRs) is not exposed as a workflow
+input.
 
 ## `release-please.yml`
 
