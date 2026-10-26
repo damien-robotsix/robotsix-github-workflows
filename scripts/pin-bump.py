@@ -34,6 +34,8 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import time
+from collections.abc import Callable
 from pathlib import Path
 
 if sys.version_info >= (3, 11):
@@ -61,6 +63,73 @@ def gh(*args: str, env: dict[str, str] | None = None) -> str:
         kwargs["env"] = env
     cp = subprocess.run(("gh",) + args, text=True, check=True, **kwargs)  # type: ignore[call-overload]
     return cp.stdout.strip()  # type: ignore[no-any-return]
+
+
+# Back-off delays (seconds) between push retries on transient server errors.
+PUSH_RETRY_DELAYS: tuple[int, ...] = (10, 20, 40)
+
+# Push output patterns that indicate a transient GitHub-side failure worth
+# retrying.  Anything else (auth, protected branch, non-fast-forward) fails
+# immediately.
+_TRANSIENT_PUSH_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"remote: Internal Server Error", re.IGNORECASE),
+    re.compile(r"remote rejected.*\(Internal Server Error\)", re.IGNORECASE),
+    re.compile(r"\bHTTP(?:/[\d.]+)?\s*5\d\d\b", re.IGNORECASE),
+    re.compile(r"returned error: 5\d\d\b", re.IGNORECASE),
+    re.compile(r"The remote end hung up unexpectedly", re.IGNORECASE),
+)
+
+_REQUEST_ID_RE = re.compile(r"\b([0-9A-F]{3,5}(?::[0-9A-F]+){4})\b")
+
+# "<owner>/<repo>" → number of push retries needed by _apply_pin_bump.
+_push_retry_counts: dict[str, int] = {}
+
+
+def _is_transient_push_error(output: str) -> bool:
+    """Return True when *output* from ``git push`` looks like a transient 5xx."""
+    return any(p.search(output) for p in _TRANSIENT_PUSH_PATTERNS)
+
+
+def _push_with_retry(
+    repo_dir: Path,
+    branch: str,
+    *,
+    delays: tuple[int, ...] = PUSH_RETRY_DELAYS,
+    sleep: Callable[[float], None] | None = None,
+) -> int:
+    """Force-push *branch* from *repo_dir*, retrying transient server errors.
+
+    Retries up to ``len(delays)`` times, sleeping ``delays[i]`` seconds
+    before retry *i*, only when the push output matches a transient
+    GitHub 5xx pattern.  Any other failure raises
+    ``subprocess.CalledProcessError`` immediately.  Returns the number of
+    retries that were needed (0 when the first push succeeded).
+    """
+    sleep_fn = sleep if sleep is not None else time.sleep
+    cmd = ("git", "-C", str(repo_dir), "push", "--force", "origin", branch)
+    attempt = 0
+    while True:
+        cp = run(*cmd, check=False, capture_output=True)
+        output = (cp.stdout or "") + (cp.stderr or "")
+        if output:
+            print(output, end="" if output.endswith("\n") else "\n")
+        if cp.returncode == 0:
+            return attempt
+        if attempt >= len(delays) or not _is_transient_push_error(output):
+            raise subprocess.CalledProcessError(
+                cp.returncode, cmd, output=cp.stdout, stderr=cp.stderr
+            )
+        delay = delays[attempt]
+        attempt += 1
+        m = _REQUEST_ID_RE.search(output)
+        request_id = m.group(1) if m else "unknown"
+        print(
+            f"  push of {branch} hit a transient server error "
+            f"(GitHub request id {request_id}); retry {attempt}/{len(delays)} "
+            f"in {delay}s",
+            file=sys.stderr,
+        )
+        sleep_fn(delay)
 
 
 # ---------------------------------------------------------------------------
@@ -560,7 +629,8 @@ def _apply_pin_bump(
         "-m",
         "chore: bump first-party git pin revs",
     )
-    run("git", "-C", str(repo_dir), "push", "--force", "origin", bump_branch)
+    retries = _push_with_retry(repo_dir, bump_branch)
+    _push_retry_counts[f"{owner}/{repo}"] = retries
 
     # Capture the pushed commit SHA so dependents can pin to it
     pushed_sha = run(
@@ -630,12 +700,15 @@ def _write_sweep_summary(
     unresolved_urls: list[tuple[str, str]],
     skipped_cycles: list[tuple[str, str]] | None = None,
     planned: dict[str, list[tuple[str, str]]] | None = None,
+    bumped_notes: dict[str, str] | None = None,
 ) -> None:
     """Write the sweep summary to stdout and ``$GITHUB_STEP_SUMMARY``.
 
     *planned* (dry-run only) maps repo → ``[(pkg, new_sha)]`` bumps that
-    would be applied.
+    would be applied.  *bumped_notes* maps a bumped repo to a short note
+    (e.g. ``retried 1×``) appended to its summary line.
     """
+    notes = bumped_notes or {}
     lines: list[str] = []
     lines.append("## Pin Bump Sweep Summary")
     lines.append("")
@@ -653,7 +726,8 @@ def _write_sweep_summary(
     if bumped:
         lines.append(f"### Bumped ({len(bumped)})")
         for r in bumped:
-            lines.append(f"- {owner}/{r}")
+            note = f" ({notes[r]})" if r in notes else ""
+            lines.append(f"- {owner}/{r}{note}")
         lines.append("")
     else:
         lines.append("### Bumped")
@@ -788,6 +862,7 @@ def sweep(owner: str, token_env: str, dry_run: bool = False) -> int:
 
     print(f"\n{len(repo_bumps)} repo(s) need pin bumps.")
     bumped: list[str] = []
+    bumped_notes: dict[str, str] = {}
     failed: list[tuple[str, str]] = []
     skipped_cycles: list[tuple[str, str]] = []
     # Track the commit SHA pushed to each repo's PR branch so that
@@ -834,13 +909,22 @@ def sweep(owner: str, token_env: str, dry_run: bool = False) -> int:
                 if pushed_sha is not None:
                     pushed_shas[repo] = pushed_sha
                 bumped.append(repo)
+                retries = _push_retry_counts.pop(f"{owner}/{repo}", 0)
+                if retries:
+                    bumped_notes[repo] = f"retried {retries}×"
             except Exception as exc:
                 failed.append((repo, str(exc)))
                 failed_or_skipped.add(repo)
                 print(f"\n  FAILED {owner}/{repo}: {exc}", file=sys.stderr)
 
     _write_sweep_summary(
-        owner, bumped, failed, skipped_repos, unresolved_urls, skipped_cycles
+        owner,
+        bumped,
+        failed,
+        skipped_repos,
+        unresolved_urls,
+        skipped_cycles,
+        bumped_notes=bumped_notes,
     )
     return 1 if failed else 0
 

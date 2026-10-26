@@ -1041,6 +1041,175 @@ class TestApplyPinBump:
 
 
 # ---------------------------------------------------------------------------
+# push retry on transient GitHub 5xx
+# ---------------------------------------------------------------------------
+
+_GH_500_PUSH_OUTPUT = (
+    "remote: Internal Server Error\n"
+    "remote: request id DC41:7D1A4:5128FE:6AC9B6:6ADFE079\n"
+    "To https://github.com/test-org/myrepo.git\n"
+    " ! [remote rejected] pin-bump/sweep -> pin-bump/sweep (Internal Server Error)\n"
+    "error: failed to push some refs to 'https://github.com/test-org/myrepo.git'\n"
+)
+
+
+def _fake_push_run(push_results: list[tuple[int, str]], calls: list[tuple[str, ...]]):
+    """Return a fake ``run`` whose successive ``git push`` calls yield
+    *push_results* ``(returncode, stderr)``; other commands succeed."""
+
+    def fake_run(*args: str, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(args)
+        if "push" in args:
+            rc, err = push_results.pop(0)
+            return subprocess.CompletedProcess(
+                args=args, returncode=rc, stdout="", stderr=err
+            )
+        return subprocess.CompletedProcess(
+            args=args, returncode=0, stdout="", stderr=""
+        )
+
+    return fake_run
+
+
+class TestPushWithRetry:
+    """Tests for _push_with_retry."""
+
+    def test_transient_500_retried_then_succeeds(
+        self, tmp_path: Path, monkeypatch, capsys
+    ) -> None:
+        calls: list[tuple[str, ...]] = []
+        monkeypatch.setattr(
+            _pin_bump,
+            "run",
+            _fake_push_run([(1, _GH_500_PUSH_OUTPUT), (0, "")], calls),
+        )
+        sleeps: list[float] = []
+
+        retries = _pin_bump._push_with_retry(
+            tmp_path, "pin-bump/sweep", sleep=sleeps.append
+        )
+
+        assert retries == 1
+        assert sleeps == [10]
+        assert len([c for c in calls if "push" in c]) == 2
+        err = capsys.readouterr().err
+        assert "DC41:7D1A4:5128FE:6AC9B6:6ADFE079" in err
+        assert "retry 1/3" in err
+
+    def test_non_transient_error_fails_immediately(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        calls: list[tuple[str, ...]] = []
+        monkeypatch.setattr(
+            _pin_bump,
+            "run",
+            _fake_push_run(
+                [(128, "remote: Permission to test-org/myrepo.git denied.\n")],
+                calls,
+            ),
+        )
+        sleeps: list[float] = []
+
+        with pytest.raises(subprocess.CalledProcessError):
+            _pin_bump._push_with_retry(tmp_path, "pin-bump/sweep", sleep=sleeps.append)
+
+        assert sleeps == []
+        assert len(calls) == 1
+
+    def test_gives_up_after_bounded_retries(self, tmp_path: Path, monkeypatch) -> None:
+        calls: list[tuple[str, ...]] = []
+        monkeypatch.setattr(
+            _pin_bump,
+            "run",
+            _fake_push_run(
+                [(1, "fatal: The remote end hung up unexpectedly\n")] * 4, calls
+            ),
+        )
+        sleeps: list[float] = []
+
+        with pytest.raises(subprocess.CalledProcessError):
+            _pin_bump._push_with_retry(tmp_path, "pin-bump/sweep", sleep=sleeps.append)
+
+        assert sleeps == [10, 20, 40]
+        assert len(calls) == 4
+
+    @pytest.mark.parametrize(
+        "output",
+        [
+            "remote: Internal Server Error",
+            " ! [remote rejected] b -> b (Internal Server Error)",
+            "error: RPC failed; HTTP 502 curl 22 The requested URL returned error: 502",
+            "fatal: The remote end hung up unexpectedly",
+        ],
+    )
+    def test_transient_patterns(self, output: str) -> None:
+        assert _pin_bump._is_transient_push_error(output)
+
+    @pytest.mark.parametrize(
+        "output",
+        [
+            "remote: Permission to o/r.git denied to bot.",
+            " ! [remote rejected] main -> main (protected branch hook declined)",
+            " ! [rejected] b -> b (non-fast-forward)",
+        ],
+    )
+    def test_non_transient_patterns(self, output: str) -> None:
+        assert not _pin_bump._is_transient_push_error(output)
+
+    def test_sweep_lists_retried_repo_as_bumped(
+        self, tmp_path: Path, monkeypatch, capsys
+    ) -> None:
+        """A single transient 5xx on push does not fail the repo; the summary
+        lists it as bumped with a 'retried 1×' note."""
+        monkeypatch.setattr(
+            _pin_bump,
+            "_collect_fleet_pins",
+            lambda *a, **kw: (
+                {"https://github.com/org/dep.git": [("myrepo", "mypkg", "0" * 40)]},
+                [],
+                ["myrepo"],
+            ),
+        )
+        monkeypatch.setattr(
+            _pin_bump,
+            "_resolve_latest_shas",
+            lambda dm: ({"https://github.com/org/dep.git": "f" * 40}, []),
+        )
+        push_results = [(1, _GH_500_PUSH_OUTPUT), (0, "")]
+
+        def fake_run(*args: str, **kwargs: object) -> subprocess.CompletedProcess[str]:
+            if args[0] == "git" and args[1] == "clone":
+                dest = Path(args[-1])
+                dest.mkdir(parents=True, exist_ok=True)
+                (dest / "pyproject.toml").write_text(
+                    "[tool.uv.sources]\n"
+                    'mypkg = { git = "https://github.com/org/dep.git", '
+                    f'rev = "{"0" * 40}" }}\n'
+                )
+            if "push" in args:
+                rc, err = push_results.pop(0)
+                return subprocess.CompletedProcess(
+                    args=args, returncode=rc, stdout="", stderr=err
+                )
+            if args[0] == "gh" and args[1:3] == ("pr", "list"):
+                raise subprocess.CalledProcessError(1, args)
+            return subprocess.CompletedProcess(
+                args=args, returncode=0, stdout="main\n", stderr=""
+            )
+
+        monkeypatch.setattr(_pin_bump, "run", fake_run)
+        monkeypatch.setattr(_pin_bump.time, "sleep", lambda s: None)
+        monkeypatch.setenv("SWEEP_TOKEN", "fake-token")
+        monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+
+        assert sweep("test-org", "SWEEP_TOKEN") == 0
+        out = capsys.readouterr().out
+        assert "### Bumped (1)" in out
+        assert "- test-org/myrepo (retried 1×)" in out
+        assert "### Failed\n(none)" in out
+
+
+# ---------------------------------------------------------------------------
 # sweep (orchestrator)
 # ---------------------------------------------------------------------------
 
