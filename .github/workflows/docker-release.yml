@@ -107,6 +107,18 @@ on:
         required: false
         type: string
         default: ""
+      push-retries:
+        description: >
+          Extra attempts for the hardened-image build+push when it fails
+          (e.g. GHCR's intermittent `unknown blob` blob-upload race). Each
+          retry re-runs `docker buildx build --push` from the warm builder
+          cache after a short back-off; blobs already uploaded are reused.
+          Retries stay inside the push step, so the Trivy gate, smoke test
+          and attestations run once, on the published image. `0` keeps a
+          single attempt.
+        required: false
+        type: number
+        default: 3
     secrets:
       build-secrets:
         description: >
@@ -201,17 +213,61 @@ jobs:
       # the by-digest base and push it to the consumer tags WITH provenance +
       # SBOM. This is the image the Trivy gate below scans and consumers pull,
       # so it carries the patched packages (e.g. perl-base >= 5.40.1-6+deb13u1).
+      # Retried up to `push-retries` extra times: GHCR intermittently fails a
+      # push mid-stream with `unknown blob`. The loop lives inside this one
+      # step (docker buildx build, not build-push-action) so a retry never
+      # re-runs the Trivy gate or anything else; the provenance/SBOM
+      # attestations are pushed with the image index by the attempt that
+      # succeeds.
       - name: Build and push hardened image
         id: build
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7
-        with:
-          context: /tmp/harden
-          file: /tmp/harden/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          provenance: mode=max
-          sbom: true
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          LABELS: ${{ steps.meta.outputs.labels }}
+          PUSH_RETRIES: ${{ inputs.push-retries }}
+          BUILDER_ID: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          args=()
+          while IFS= read -r tag; do
+            [ -n "$tag" ] && args+=(--tag "$tag")
+          done <<< "$TAGS"
+          while IFS= read -r label; do
+            [ -n "$label" ] && args+=(--label "$label")
+          done <<< "$LABELS"
+          retries="${PUSH_RETRIES:-0}"
+          case "$retries" in ''|*[!0-9]*) echo "::error::push-retries must be a non-negative integer, got '$retries'"; exit 1 ;; esac
+          attempts=$((retries + 1))
+          attempt=1
+          while :; do
+            echo "Build and push attempt ${attempt}/${attempts}"
+            rm -f /tmp/harden-metadata.json
+            if docker buildx build \
+                --file /tmp/harden/Dockerfile \
+                --push \
+                --provenance "mode=max,builder-id=${BUILDER_ID}" \
+                --sbom true \
+                --metadata-file /tmp/harden-metadata.json \
+                "${args[@]}" \
+                /tmp/harden; then
+              break
+            fi
+            if [ "$attempt" -ge "$attempts" ]; then
+              echo "::error::Build and push failed after ${attempts} attempt(s)"
+              exit 1
+            fi
+            delay=$((attempt * 15))
+            echo "::warning::Push attempt ${attempt}/${attempts} failed; retrying in ${delay}s"
+            sleep "$delay"
+            attempt=$((attempt + 1))
+          done
+          # sed, not jq: jq is not guaranteed on self-hosted runners.
+          digest="$(sed -n 's/.*"containerimage\.digest": *"\(sha256:[0-9a-f]*\)".*/\1/p' /tmp/harden-metadata.json | head -1)"
+          if [ -z "$digest" ]; then
+            echo "::error::No containerimage.digest in buildx metadata"
+            exit 1
+          fi
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
       # Fail-closed check on the hardening layer's security property: the
       # published image must run as the SAME user as the Stage-1 base. The
