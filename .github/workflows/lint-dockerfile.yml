@@ -31,9 +31,25 @@ on:
         required: false
         type: string
         default: ""
+      upload-sarif:
+        description: >-
+          When true, an extra hadolint-sarif job runs hadolint with SARIF
+          output and uploads it to code scanning
+          (github/codeql-action/upload-sarif, category `hadolint`). The
+          job inherits the caller's token, so the CALLING job must grant
+          `security-events: write` (plus `contents: read`). Default false:
+          no extra job and no extra permission needed.
+        required: false
+        type: boolean
+        default: false
 
-permissions:
-  contents: read
+# No workflow-level `permissions:` block on purpose. The hadolint job
+# declares its own least-privilege block. hadolint-sarif declares none, so it
+# inherits the CALLER's token. That lets it use security-events:write when a
+# caller opts in with upload-sarif: true. Declaring `security-events: write`
+# here would break every existing caller that does not grant it, with a
+# startup_failure (GitHub checks requested permissions against the caller's
+# grant whether or not the job's `if:` is true).
 
 jobs:
   hadolint:
@@ -76,3 +92,60 @@ jobs:
           dockerfile: ${{ steps.resolve.outputs.files }}
           failure-threshold: ${{ inputs.failure-threshold }}
           config: ${{ inputs.config }}
+
+  hadolint-sarif:  # zizmor: ignore[excessive-permissions] -- inherits the caller's token by design (see below)
+    # Opt-in (upload-sarif: true): publishes the hadolint findings to code
+    # scanning. The hadolint job above stays the human-readable gate; this
+    # job applies the same failure-threshold. The upload step uses
+    # `success() || failure()` so the SARIF is still published when hadolint
+    # reports findings.
+    # No `permissions:` block: the job inherits the caller's token, and the
+    # caller must grant security-events:write + contents:read (see the
+    # workflow-level comment above).
+    if: ${{ inputs.upload-sarif }}
+    name: Hadolint (SARIF)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          persist-credentials: false
+
+      - name: Resolve Dockerfiles
+        id: resolve
+        env:
+          DOCKERFILES: ${{ inputs.dockerfiles }}
+        run: |
+          shopt -s nullglob globstar
+          files=()
+          # Word-splitting and glob expansion of $DOCKERFILES is intentional.
+          # shellcheck disable=SC2086
+          for f in $DOCKERFILES; do
+            if [ -f "$f" ]; then
+              files+=("$f")
+            fi
+          done
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::notice::No Dockerfile matched '${DOCKERFILES}'; skipping hadolint."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Linting: ${files[*]}"
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "files=${files[*]}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run hadolint (SARIF)
+        if: ${{ steps.resolve.outputs.found == 'true' }}
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387  # v3.5.0
+        with:
+          dockerfile: ${{ steps.resolve.outputs.files }}
+          failure-threshold: ${{ inputs.failure-threshold }}
+          config: ${{ inputs.config }}
+          format: sarif
+          output-file: hadolint.sarif
+
+      - name: Upload hadolint SARIF to code scanning
+        if: ${{ (success() || failure()) && hashFiles('hadolint.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370  # v4.39.1
+        with:
+          sarif_file: hadolint.sarif
+          category: hadolint

@@ -668,6 +668,24 @@ jobs:
       dockerfiles: "Dockerfile Dockerfile.dev"  # space-separated paths/globs; default "Dockerfile"
       # failure-threshold: warning  # default
       # config: .hadolint.yaml      # optional hadolint config
+      # upload-sarif: false         # default — true adds a hadolint-sarif job that
+      #   # uploads findings to code scanning (category `hadolint`).
+      #   # REQUIRES the calling job to grant `security-events: write` (+ contents: read).
+```
+
+To publish findings to code scanning, opt in and grant the permission on the
+calling job (the `hadolint-sarif` job inherits the caller's token; callers
+that leave `upload-sarif` off need no extra permission):
+
+```yaml
+jobs:
+  hadolint:
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/lint-dockerfile.yml@<sha>
+    permissions:
+      contents: read
+      security-events: write
+    with:
+      upload-sarif: true
 ```
 
 ## `pin-bump.yml` — caller template
