@@ -463,6 +463,8 @@ jobs:
     #   languages: "python"                   # default
     #   queries: "security-and-quality"       # default
     #   config-file: ".github/codeql/codeql-config.yml"  # optional
+    #   build-mode: "none"                    # optional; "none", "autobuild", or "manual". Empty = autobuild step runs
+    #                                         # ("none" skips the autobuild step — use for Python)
     #   runs-on: "ubuntu-latest"              # default
     permissions:
       # Required — the reusable workflow needs security-events: write
