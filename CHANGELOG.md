@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.4.0](https://github.com/damien-robotsix/robotsix-github-workflows/compare/v1.3.0...v1.4.0) (2026-10-27)
+
+
+### Features
+
+* Add build-mode input to reusable codeql.yml so interpreted-language callers can skip autobuild (20261027T070828Z-add-build-mode-input-to-reusable-codeql-4747) ([#257](https://github.com/damien-robotsix/robotsix-github-workflows/issues/257)) ([76fa831](https://github.com/damien-robotsix/robotsix-github-workflows/commit/76fa8315f9a4b07fce09ba5e79990857a8977d17))
+* Add build-secrets and explicit trivyignores inputs to robotsix-github-workflows docker-pr-scan.yml / docker-release.yml so repos can drop their inline docker-build plus Trivy jobs (20261025T215723Z-add-build-secrets-and-explicit-trivyigno-e9c3) ([#244](https://github.com/damien-robotsix/robotsix-github-workflows/issues/244)) ([3cd2961](https://github.com/damien-robotsix/robotsix-github-workflows/commit/3cd2961e00966120e6b5b62d7a23ddafbe4457f7))
+* Add runner, Trivy-DB-mirror and private-repo SARIF-skip inputs to docker-release.yml so robotsix-invest can drop its inline publish+Trivy job (20261026T021213Z-add-runner-trivy-db-mirror-and-private-r-4582) ([#245](https://github.com/damien-robotsix/robotsix-github-workflows/issues/245)) ([4cb2665](https://github.com/damien-robotsix/robotsix-github-workflows/commit/4cb266512e8016022901311110aa469018c7709d))
+* docker-release.yml: retry the GHCR push on the intermittent 'unknown blob' error (20261026T123208Z-docker-release-yml-retry-the-ghcr-push-o-92be) ([#249](https://github.com/damien-robotsix/robotsix-github-workflows/issues/249)) ([f67d72f](https://github.com/damien-robotsix/robotsix-github-workflows/commit/f67d72f3e64174d7d95883b79a7c53a299bbdc38))
+* pin-bump.py: detect PEP 508 direct-URL git pins in project.dependencies (reported today as 'no git pins') (20261026T123209Z-pin-bump-py-detect-pep-508-direct-url-gi-484d) ([#248](https://github.com/damien-robotsix/robotsix-github-workflows/issues/248)) ([84ff2d1](https://github.com/damien-robotsix/robotsix-github-workflows/commit/84ff2d18a3dbf03e2c6ec8342e441fa3c5a15570))
+* Shared .trivyignore expiry gate in robotsix-github-workflows (port mill's check_trivyignore_expiry.py) (20261024T165915Z-shared-trivyignore-expiry-gate-in-robots-ef0e) ([#240](https://github.com/damien-robotsix/robotsix-github-workflows/issues/240)) ([67d2d47](https://github.com/damien-robotsix/robotsix-github-workflows/commit/67d2d4766b1d226e4cfff4d045b0f44b9acb8c03))
+* Ship a reusable dependency-review.yml (workflow_call) so callers stop drifting on inline actions/dependency-review-action policies (20261027T063448Z-ship-a-reusable-dependency-review-yml-wo-30e6) ([#252](https://github.com/damien-robotsix/robotsix-github-workflows/issues/252)) ([1376057](https://github.com/damien-robotsix/robotsix-github-workflows/commit/1376057414860d3dd06e4def8075c52daae6a35b))
+
+
+### Bug Fixes
+
+* pin-bump.py sweep: retry a force-push rejected with a GitHub 5xx (remote: Internal Server Error) instead of failing the target repo (20261026T232332Z-pin-bump-py-sweep-retry-a-force-push-rej-d638) ([#250](https://github.com/damien-robotsix/robotsix-github-workflows/issues/250)) ([b9388c4](https://github.com/damien-robotsix/robotsix-github-workflows/commit/b9388c432eeba3c83f21cc588935cdeea6f8c218))
+* Revert ghcr.io default for Trivy DB inputs in docker-release.yml and docker-pr-scan.yml to empty (20261026T114947Z-revert-ghcr-io-default-for-trivy-db-inpu-ea1d) ([#246](https://github.com/damien-robotsix/robotsix-github-workflows/issues/246)) ([4fbac1b](https://github.com/damien-robotsix/robotsix-github-workflows/commit/4fbac1ba6b8ce069cc74e1cd4644b1a527386e03))
+
 ## [1.3.0](https://github.com/damien-robotsix/robotsix-github-workflows/compare/v1.2.0...v1.3.0) (2026-10-26)
 
 
