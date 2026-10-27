@@ -201,6 +201,11 @@ jobs:
     #     # Example .audit-ignore:
     #     #   GHSA-w8v5-vhqr-4h9v  # diskcache unsafe pickle, no fix available (2026-07)
     #   audit-ignore: ""                          # DEPRECATED — use audit-ignore-file
+    #   audit-sarif: false                        # default — true adds an audit-sarif job that
+    #     # uploads `uv audit --output-format sarif` to code scanning (still blocking).
+    #     # REQUIRES the calling job to grant `security-events: write` (+ contents: read).
+    #   check-lock: false                         # default — true runs `uv lock --check`
+    #     # (fails when uv.lock has drifted from pyproject.toml).
     #   job_split: false                          # default — single monolithic Tests job
     #     # When true, emits three parallel jobs (Lint, Type Check, Test)
     #     # instead of one sequential Tests job.  Each reports its own
