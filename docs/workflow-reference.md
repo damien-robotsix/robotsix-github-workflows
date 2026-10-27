@@ -197,8 +197,18 @@ annotation are reported as warnings, or fail the job when
 | `dockerfiles` | string | `Dockerfile` | Space-separated Dockerfile paths or glob patterns (e.g. `Dockerfile Dockerfile.dev`). Non-existent paths are ignored; if nothing matches, hadolint is skipped with a notice. |
 | `failure-threshold` | string | `warning` | Fail only on rules at or above this severity (`error`, `warning`, `info`, `style`, `ignore`). |
 | `config` | string | `""` | Path to a hadolint config file. Empty uses hadolint's default config discovery. |
+| `upload-sarif` | boolean | `false` | Also run hadolint with `format: sarif` in a separate `hadolint-sarif` job and upload `hadolint.sarif` to code scanning (`github/codeql-action/upload-sarif`, category `hadolint`). The job applies the same `failure-threshold`. |
 
 No secrets.
+
+**Permissions with `upload-sarif: true`:** the `hadolint-sarif` job inherits
+the caller's token, so the **calling job** must grant `security-events: write`
+and `contents: read`. Callers that leave `upload-sarif` off need no extra
+permission, which is why `lint-dockerfile.yml` is not in the
+`lint-workflows.yml` `sarif-workflows` default. A caller that opts in may add
+it to its own `sarif-workflows` input. The SARIF is uploaded with
+`if: success() || failure()`, so findings are published even when hadolint
+fails the job.
 
 ## `mutation-test.yml`
 
