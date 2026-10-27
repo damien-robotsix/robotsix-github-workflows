@@ -350,7 +350,7 @@ jobs:
             .coverage
           if-no-files-found: error
 
-  audit-sarif:
+  audit-sarif:  # zizmor: ignore[excessive-permissions] -- inherits the caller's token by design (see below)
     # Opt-in (audit-sarif: true): publishes the uv audit findings to code
     # scanning. The blocking CVE gate in tests/lint stays in place. This job
     # is blocking as well (no continue-on-error, no `|| true`). The upload
