@@ -27,6 +27,7 @@ jobs:
 | `baseline-check.yml` | enforce AGENT.md and .github/dependabot.yml baseline rules |
 | `codeql.yml` | CodeQL static analysis |
 | `scorecard.yml` | OpenSSF Scorecard supply-chain posture analysis (SARIF to Code Scanning) |
+| `dependency-review.yml` | PR gate: dependency-review-action vulnerability-severity + license policy check |
 | `config-ownership-check.yml` | PR gate: prevents deploy-plane config from leaking component-internal settings |
 | `lint-workflows.yml` | actionlint + zizmor audit of workflow files, SARIF-upload-permission validation, trigger-coverage validation, opt-in workflow-conventions checker, opt-in Dockerfile `FROM` digest-pin check, and opt-in `.trivyignore` expiry gate |
 | `lint-dockerfile.yml` | opt-in hadolint lint of one or more Dockerfiles (skipped when none exist) |
@@ -490,6 +491,49 @@ jobs:
     - tests
     - '**/*.test.py'
   ```
+
+## `dependency-review.yml` — caller template
+
+Consumer repos add a wrapper workflow (e.g.
+`.github/workflows/dependency-review.yml`) that triggers on pull requests.
+The `actions/dependency-review-action` SHA is pinned once here, so
+Dependabot bumps it for every caller.
+
+```yaml
+name: Dependency Review
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  dependency-review:
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/dependency-review.yml@<sha>
+    # All inputs are optional — defaults shown in comments:
+    # with:
+    #   fail-on-severity: "moderate"          # default
+    #   config-file: ".github/dependency-review-config.yml"  # optional
+    #   deny-licenses: "GPL-2.0-only, GPL-3.0-only, AGPL-3.0-only"  # optional
+    #   allow-licenses: ""                    # optional, exclusive with deny-licenses
+    #   comment-summary-in-pr: true           # default
+    #   runs-on: "ubuntu-latest"              # default
+    permissions:
+      contents: read
+      pull-requests: write  # PR summary comment
+```
+
+**Inputs:**
+
+| Input | Default | Description |
+|---|---|---|
+| `fail-on-severity` | `moderate` | Lowest severity (`low`/`moderate`/`high`/`critical`) that fails the check. Overrides the same key in `config-file`. |
+| `config-file` | `""` | Path to a dependency-review-action config file in the calling repo (the repo is checked out only when this is set). |
+| `deny-licenses` | `""` | Comma-separated SPDX identifiers that fail the check. |
+| `allow-licenses` | `""` | Comma-separated SPDX identifiers that are the only ones allowed. Mutually exclusive with `deny-licenses`. |
+| `comment-summary-in-pr` | `true` | Post the review summary as a PR comment. |
+| `runs-on` | `ubuntu-latest` | Runner label for the job. |
+
+The job is skipped (clean "skipped" status) on any event other than
+`pull_request`, so the wrapper may share a file with push triggers.
 
 ## `bump.yml` — caller template
 
