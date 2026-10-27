@@ -89,6 +89,17 @@ Commit subjects and PR titles must follow the
 `CHANGELOG.md` from these commit messages — do **not** add changelog
 fragments or use towncrier.
 
+## Security lint suppressions
+
+### Suppress zizmor findings inline, never file-wide
+
+Suppress a zizmor finding only with an inline `# zizmor: ignore[<rule>]`
+comment on the specific job or step line, followed by a one-line reason.
+Never add a file-wide rule ignore in `.github/zizmor.yml`, because it hides
+future findings in every job of the file.  For example, PR #258 added a
+file-wide `excessive-permissions` ignore for `python-ci.yml`.  PR #260
+replaced it with an inline per-job ignore.
+
 ## Testing conventions
 
 ### Use bare `pytest` or `pytest tests/` to invoke test suites
