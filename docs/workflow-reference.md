@@ -50,6 +50,7 @@ this repository.
 | `languages` | string | `python` | Languages to analyze. |
 | `queries` | string | `security-and-quality` | Query suite. |
 | `config-file` | string | `""` | Path to a repo-local CodeQL configuration file (e.g. .github/codeql/codeql-config.yml). Empty = no config file. |
+| `build-mode` | string | `""` | CodeQL build mode forwarded to `codeql-action/init` (`none`, `autobuild`, or `manual`). Empty = not passed to init and the autobuild step runs; when set, the autobuild step is skipped. Use `none` for Python. |
 | `runs-on` | string | `ubuntu-latest` | Runner label. |
 
 No secrets.

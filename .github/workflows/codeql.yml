@@ -18,6 +18,11 @@ on:
         required: false
         type: string
         default: ""
+      build-mode:
+        description: CodeQL build mode forwarded to codeql-action/init (none, autobuild, or manual).  Empty = not passed to init and the autobuild step runs; when set, the autobuild step is skipped.
+        required: false
+        type: string
+        default: ""
       runs-on:
         description: Runner label for the analysis job.
         required: false
@@ -44,8 +49,11 @@ jobs:
           languages: ${{ inputs.languages }}
           queries: ${{ inputs.queries }}
           config-file: ${{ inputs.config-file }}
+          # empty string is treated as unset by codeql-action/init
+          build-mode: ${{ inputs.build-mode }}
 
       - uses: github/codeql-action/autobuild@9b3254085494b55a0f7c4c2b3d2d52cc712ce370  # v4.39.1
+        if: inputs.build-mode == ''
         # autobuild is a no-op for Python but included so this workflow
         # extends to compiled languages without changes
 
