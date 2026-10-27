@@ -12,6 +12,12 @@ updates:
     labels:
       - "dependencies"
       - "github-actions"
+    groups:
+      # Keep init/autobuild/analyze on the same codeql-action release;
+      # they must not be bumped independently.
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
 
   - package-ecosystem: "pre-commit"
     directory: "/"
