@@ -1,0 +1,81 @@
+name: Dependency Review
+
+on:
+  workflow_call:
+    inputs:
+      fail-on-severity:
+        description: >
+          Lowest vulnerability severity that fails the check: `low`,
+          `moderate`, `high` or `critical`. Defaults to `moderate`. Inline
+          inputs take precedence over the same key in `config-file`.
+        required: false
+        type: string
+        default: "moderate"
+      config-file:
+        description: >
+          Path (relative to the calling repository root) of a
+          dependency-review-action configuration file, e.g.
+          `.github/dependency-review-config.yml`. Empty (the default) uses
+          no config file.
+        required: false
+        type: string
+        default: ""
+      deny-licenses:
+        description: >
+          Comma-separated list of SPDX license identifiers that fail the
+          check, e.g. `GPL-3.0-only, AGPL-3.0-only`. Empty (the default)
+          denies nothing. Mutually exclusive with `allow-licenses`.
+        required: false
+        type: string
+        default: ""
+      allow-licenses:
+        description: >
+          Comma-separated list of SPDX license identifiers that are the only
+          ones allowed. Empty (the default) allows every license. Mutually
+          exclusive with `deny-licenses`.
+        required: false
+        type: string
+        default: ""
+      comment-summary-in-pr:
+        description: >
+          Whether to post the review summary as a pull-request comment
+          (requires `pull-requests: write`, granted by this workflow).
+        required: false
+        type: boolean
+        default: true
+      runs-on:
+        description: >
+          Runner label for the job (e.g. `self-hosted` for zero billed
+          minutes). Defaults to `ubuntu-latest`.
+        required: false
+        type: string
+        default: "ubuntu-latest"
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-review:
+    name: Dependency review
+    # The action diffs the PR's base and head manifests; it has nothing to
+    # compare on push/schedule events, so only run for pull requests.
+    if: github.event_name == 'pull_request'
+    runs-on: ${{ inputs.runs-on }}
+    permissions:
+      contents: read
+      pull-requests: write  # comment-summary-in-pr
+    steps:
+      # A local `config-file` is read from the workspace, so check out the
+      # caller's repo only when one is given.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        if: inputs.config-file != ''
+        with:
+          persist-credentials: false
+
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294  # v5
+        with:
+          fail-on-severity: ${{ inputs.fail-on-severity }}
+          config-file: ${{ inputs.config-file }}
+          deny-licenses: ${{ inputs.deny-licenses }}
+          allow-licenses: ${{ inputs.allow-licenses }}
+          comment-summary-in-pr: ${{ inputs.comment-summary-in-pr && 'always' || 'never' }}
