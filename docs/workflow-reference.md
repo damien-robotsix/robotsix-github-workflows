@@ -308,9 +308,19 @@ states the accepted alternatives in its response header:
 | `mypy-advisory` | boolean | `false` | Advisory-only mypy (don't fail). |
 | `audit-ignore-file` | string | `.audit-ignore` | Single-source advisory ignore file (see [Audit ignore file](#audit-ignore-file)). |
 | `audit-ignore` | string | `""` | **Deprecated** — space/comma-separated advisory IDs, merged with `audit-ignore-file`. |
+| `audit-sarif` | boolean | `false` | Also run `uv audit --frozen --output-format sarif` in a separate `audit-sarif` job and upload it to code scanning (`github/codeql-action/upload-sarif`, category `uv-audit`). The job stays blocking. Requires `run-audit: true` and a uv that ships `uv audit`. |
+| `check-lock` | boolean | `false` | Run `uv lock --check` (fails when `uv.lock` has drifted from `pyproject.toml`). |
 | `job_split` | boolean | `false` | Split into parallel lint/type/test jobs. |
 
 No secrets.
+
+**Permissions with `audit-sarif: true`:** the `audit-sarif` job inherits the
+caller's token, so the **calling job** must grant `security-events: write` and
+`contents: read`. Callers that leave `audit-sarif` off need no extra
+permission, which is why `python-ci.yml` is not in the `lint-workflows.yml`
+`sarif-workflows` default. A caller that opts in may add it to its own
+`sarif-workflows` input. The SARIF is uploaded with `if: success() || failure()`,
+so findings still reach code scanning when the audit fails the job.
 
 ## `python-docs.yml`
 

@@ -76,6 +76,26 @@ on:
         required: false
         type: string
         default: ".audit-ignore"
+      audit-sarif:
+        description: >
+          When true (and run-audit is true), an extra audit-sarif job runs
+          `uv audit --frozen --output-format sarif` (honouring
+          audit-ignore-file / audit-ignore) and uploads the result to code
+          scanning via github/codeql-action/upload-sarif. The audit stays
+          blocking: CVEs fail the job, and the SARIF is still uploaded. The
+          CALLING job must grant `security-events: write` (plus
+          `contents: read`) when this is on. Default false — no extra job.
+        required: false
+        type: boolean
+        default: false
+      check-lock:
+        description: >
+          When true, run `uv lock --check` so a uv.lock that has drifted from
+          pyproject.toml fails CI (`uv sync --frozen` alone does not detect
+          drift). Default false.
+        required: false
+        type: boolean
+        default: false
       run-bandit:
         description: Whether to run the bandit security SAST step.
         required: false
@@ -109,8 +129,14 @@ on:
         type: boolean
         default: false
 
-permissions:
-  contents: read
+# No workflow-level `permissions:` block on purpose. Every job except
+# audit-sarif declares its own least-privilege block. audit-sarif declares
+# none, so it inherits the CALLER's token. That lets it use
+# security-events:write when a caller opts in with audit-sarif: true.
+# Declaring `security-events: write` here would break every existing caller
+# that does not grant it, with a startup_failure (GitHub checks requested
+# permissions against the caller's grant whether or not the job's `if:` is
+# true).
 
 jobs:
   tests:
@@ -130,6 +156,13 @@ jobs:
           python-version: ${{ inputs.python-version }}
           uv-version: ${{ inputs.uv-version }}
           install-extras: ${{ inputs.install-extras }}
+
+      - name: Lockfile freshness (uv lock --check)
+        if: ${{ inputs.check-lock }}
+        # `uv sync --frozen` (run by python-setup) installs straight from
+        # uv.lock without comparing it to pyproject.toml, so it neither
+        # detects nor repairs drift — this check fails if the lock is stale.
+        run: uv lock --check
 
       - name: Enforce coverage floor (hard minimum 80)
         # The fleet-wide coverage minimum lives here, not in per-repo
@@ -317,6 +350,64 @@ jobs:
             .coverage
           if-no-files-found: error
 
+  audit-sarif:
+    # Opt-in (audit-sarif: true): publishes the uv audit findings to code
+    # scanning. The blocking CVE gate in tests/lint stays in place. This job
+    # is blocking as well (no continue-on-error, no `|| true`). The upload
+    # step uses `success() || failure()` so the SARIF is still published
+    # when the audit finds CVEs.
+    # No `permissions:` block: the job inherits the caller's token, and the
+    # caller must grant security-events:write + contents:read (see the
+    # workflow-level comment above).
+    if: ${{ inputs.run-audit && inputs.audit-sarif }}
+    name: Dependency audit (SARIF)
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - uses: damien-robotsix/robotsix-github-workflows/.github/actions/python-setup@3e3e01a6eec8588bfcc756954640fa91e3801ff1
+        with:
+          python-version: ${{ inputs.python-version }}
+          uv-version: ${{ inputs.uv-version }}
+          install-extras: ${{ inputs.install-extras }}
+
+      - name: Checkout workflow library (audit-ignore parser)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          repository: damien-robotsix/robotsix-github-workflows
+          ref: ${{ github.job_workflow_sha }}
+          path: _workflow-lib
+          persist-credentials: false
+
+      - name: Dependency audit (SARIF)
+        env:
+          UV_PROJECT_ENVIRONMENT: system
+          AUDIT_IGNORE: ${{ inputs.audit-ignore }}
+          AUDIT_IGNORE_FILE: ${{ inputs.audit-ignore-file }}
+        # Same ignore handling as the gated audit step (audit_ignore.py adds
+        # --ignore-until-fixed flags and execs uv audit). The SARIF document
+        # goes to stdout and is redirected to a file. The exit code is
+        # preserved, so CVEs fail the step.
+        # pip-audit cannot produce SARIF, so a uv without `audit` is a hard
+        # error here rather than a silent fallback. An empty SARIF file (e.g.
+        # audit_ignore.py rejected an expired entry before uv ran) is
+        # deleted so the upload step is skipped and does not fail with an
+        # unrelated parse error.
+        run: |
+          trap 'rm -rf _workflow-lib; [ -s uv-audit.sarif ] || rm -f uv-audit.sarif' EXIT
+          if ! uv audit --help >/dev/null 2>&1; then
+            echo "::error::audit-sarif requires a uv version that ships 'uv audit' (set uv-version accordingly)."
+            exit 1
+          fi
+          python3 _workflow-lib/scripts/audit_ignore.py \
+            --file "$AUDIT_IGNORE_FILE" --extra "$AUDIT_IGNORE" --format uv -- \
+            uv audit --frozen --preview --output-format sarif > uv-audit.sarif
+
+      - name: Upload audit SARIF to code scanning
+        if: ${{ (success() || failure()) && hashFiles('uv-audit.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370  # v4.39.1
+        with:
+          sarif_file: uv-audit.sarif
+          category: uv-audit
+
   lint:
     if: ${{ inputs.job_split }}
     name: Lint
@@ -329,6 +420,10 @@ jobs:
           python-version: ${{ inputs.python-version }}
           uv-version: ${{ inputs.uv-version }}
           install-extras: ${{ inputs.install-extras }}
+
+      - name: Lockfile freshness (uv lock --check)
+        if: ${{ inputs.check-lock }}
+        run: uv lock --check
 
       - name: deptry (dependency hygiene)
         if: ${{ inputs.run-deptry }}
