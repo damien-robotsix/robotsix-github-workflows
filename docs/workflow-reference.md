@@ -320,6 +320,8 @@ states the accepted alternatives in its response header:
 | `audit-ignore` | string | `""` | **Deprecated** — space/comma-separated advisory IDs, merged with `audit-ignore-file`. |
 | `audit-sarif` | boolean | `false` | Also run `uv audit --frozen --output-format sarif` in a separate `audit-sarif` job and upload it to code scanning (`github/codeql-action/upload-sarif`, category `uv-audit`). The job stays blocking. Requires `run-audit: true` and a uv that ships `uv audit`. |
 | `check-lock` | boolean | `false` | Run `uv lock --check` (fails when `uv.lock` has drifted from `pyproject.toml`). |
+| `run-vulture` | boolean | `false` | Add a separate `vulture` job running `uv run vulture` (vulture `2.16`, provisioned via `--with`) as a dead-code gate. The job declares its own `contents: read` permissions — callers need grant nothing extra. |
+| `vulture-args` | string | `""` | Arguments passed verbatim to vulture (shell quoting honoured), e.g. `src/ vulture_whitelist.py --min-confidence 80 --ignore-decorators "@field_validator,@model_validator"`. Empty → vulture reads `[tool.vulture]` from `pyproject.toml`. |
 | `job_split` | boolean | `false` | Split into parallel lint/type/test jobs. |
 
 No secrets.

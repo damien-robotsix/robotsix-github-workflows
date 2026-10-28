@@ -206,6 +206,10 @@ jobs:
     #     # REQUIRES the calling job to grant `security-events: write` (+ contents: read).
     #   check-lock: false                         # default — true runs `uv lock --check`
     #     # (fails when uv.lock has drifted from pyproject.toml).
+    #   run-vulture: false                        # default — true adds a Vulture job running
+    #     # `uv run vulture` (vulture 2.16) as a dead-code gate; job needs only contents: read.
+    #   vulture-args: ""                          # default — empty reads [tool.vulture] from
+    #     # pyproject.toml; else passed verbatim, e.g. `src/ vulture_whitelist.py --min-confidence 80`.
     #   job_split: false                          # default — single monolithic Tests job
     #     # When true, emits three parallel jobs (Lint, Type Check, Test)
     #     # instead of one sequential Tests job.  Each reports its own
