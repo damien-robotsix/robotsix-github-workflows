@@ -51,6 +51,23 @@ on:
         required: false
         type: boolean
         default: true
+      run-vulture:
+        description: >
+          When true, a separate vulture job runs `uv run vulture` (vulture
+          2.16, provisioned via --with) as a dead-code gate. Default false —
+          no extra job until a caller opts in.
+        required: false
+        type: boolean
+        default: false
+      vulture-args:
+        description: >
+          Arguments passed verbatim to vulture when run-vulture is true
+          (shell quoting honoured), e.g.
+          `src/ vulture_whitelist.py --min-confidence 80`. When empty,
+          vulture reads [tool.vulture] from pyproject.toml.
+        required: false
+        type: string
+        default: ""
       run-audit:
         description: Whether to run the dependency CVE audit step (uv audit or pip-audit).
         required: false
@@ -561,3 +578,33 @@ jobs:
             coverage.xml
             .coverage
           if-no-files-found: error
+
+  vulture:
+    if: ${{ inputs.run-vulture }}
+    name: Vulture (dead code)
+    runs-on: ${{ inputs.runs-on }}
+    permissions:
+      # Least privilege: vulture only reads the checked-out tree.
+      # contents:read is still required for actions/checkout (inside
+      # python-setup) to clone PRIVATE caller repos.
+      contents: read
+    steps:
+      - uses: damien-robotsix/robotsix-github-workflows/.github/actions/python-setup@3e3e01a6eec8588bfcc756954640fa91e3801ff1
+        with:
+          python-version: ${{ inputs.python-version }}
+          uv-version: ${{ inputs.uv-version }}
+          install-extras: ${{ inputs.install-extras }}
+
+      - name: Vulture (dead-code detection)
+        env:
+          UV_PROJECT_ENVIRONMENT: system
+          VULTURE_ARGS: ${{ inputs.vulture-args }}
+        # vulture is provisioned via --with and pinned to the version the
+        # fleet's hand-rolled vulture steps use today (2.16), so consumers
+        # need not declare it. Empty VULTURE_ARGS -> vulture reads
+        # [tool.vulture] from pyproject.toml. Otherwise the args are passed
+        # verbatim; ``eval set --`` re-parses shell quoting (mirrors
+        # pytest-args) so e.g. --ignore-decorators "@a,@b" stays ONE arg.
+        run: |
+          eval "set -- $VULTURE_ARGS"
+          uv run --with 'vulture==2.16' vulture "$@"
