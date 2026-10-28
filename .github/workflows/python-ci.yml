@@ -326,6 +326,7 @@ jobs:
           PYTEST_NUMPROCESSES: ${{ inputs.pytest-numprocesses }}
           COV_PACKAGE: ${{ inputs.cov-package }}
           COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
+          INSTALL_EXTRAS: ${{ inputs.install-extras }}
         # Docker integration tests (pytest.mark.docker) require the
         # sandbox Docker image and the mill-sandbox-net proxy network
         # — infrastructure that only exists in the full mill deployment,
@@ -357,8 +358,17 @@ jobs:
           # pytest-xdist / pytest-cov to the locked version (no-op overlay)
           # or a fixed fallback. A plugin missing from the lock warns until
           # the script's FLIP_DATE, then fails — lock both in the dev group.
+          # The export mirrors python-setup's `uv sync --frozen --extra …` so
+          # tools locked in an optional extra are pinned too; pipefail makes
+          # a failing `uv export` abort the step instead of feeding the
+          # script empty input (which would yield an unpinned overlay).
+          set -o pipefail
           trap 'rm -rf _workflow-lib' EXIT
-          overlay=$(uv export --frozen --no-hashes --no-emit-project | python3 _workflow-lib/scripts/uv_with_pins.py)
+          extras=()
+          for x in $INSTALL_EXTRAS; do
+            extras+=(--extra "$x")
+          done
+          overlay=$(uv export --frozen --no-hashes --no-emit-project "${extras[@]}" | python3 _workflow-lib/scripts/uv_with_pins.py)
           rm -rf _workflow-lib
           mapfile -t overlay_args <<< "$overlay"
           uv run "${overlay_args[@]}" pytest tests/ -n "$PYTEST_NUMPROCESSES" --dist loadscope -x "$@" --tb=long --cov="$COV_PACKAGE" --cov-fail-under="$COVERAGE_THRESHOLD" --cov-report=term-missing --cov-report=xml:coverage.xml
@@ -579,11 +589,17 @@ jobs:
           PYTEST_NUMPROCESSES: ${{ inputs.pytest-numprocesses }}
           COV_PACKAGE: ${{ inputs.cov-package }}
           COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
+          INSTALL_EXTRAS: ${{ inputs.install-extras }}
         run: |
           eval "set -- $PYTEST_EXTRA_ARGS"
           # Overlay pinned to the lock — see the tests job's Run tests step.
+          set -o pipefail
           trap 'rm -rf _workflow-lib' EXIT
-          overlay=$(uv export --frozen --no-hashes --no-emit-project | python3 _workflow-lib/scripts/uv_with_pins.py)
+          extras=()
+          for x in $INSTALL_EXTRAS; do
+            extras+=(--extra "$x")
+          done
+          overlay=$(uv export --frozen --no-hashes --no-emit-project "${extras[@]}" | python3 _workflow-lib/scripts/uv_with_pins.py)
           rm -rf _workflow-lib
           mapfile -t overlay_args <<< "$overlay"
           uv run "${overlay_args[@]}" pytest tests/ -n "$PYTEST_NUMPROCESSES" --dist loadscope -x "$@" --tb=long --cov="$COV_PACKAGE" --cov-fail-under="$COVERAGE_THRESHOLD" --cov-report=term-missing --cov-report=xml:coverage.xml

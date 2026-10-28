@@ -7,9 +7,9 @@ a constraint, so ``--with pytest-xdist`` can silently pull a newer ``pytest``
 ``uv sync --frozen`` installed (incident 2026-10-28: pytest 9.2.0 overlaid on a
 lock pinning 9.1.1).  This script reads the caller's lock, as exported by::
 
-    uv export --frozen --no-hashes --no-emit-project
+    uv export --frozen --no-hashes --no-emit-project [--extra X ...]
 
-on stdin, and prints one argv token per line:
+(with the same ``--extra`` flags ``uv sync`` used) on stdin, and prints one argv token per line:
 
 * ``--with <pkg>==<locked>`` for every package in ``LOCK_PINNED`` that the
   lock contains, so the overlay cannot upgrade a locked package;
