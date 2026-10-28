@@ -205,7 +205,7 @@ jobs:
         # dev dependency (mirrors the bandit step). A bare `uv run deptry`
         # fails with "Failed to spawn: deptry" for any repo that doesn't
         # ship deptry itself.
-        run: uv run --with deptry deptry .
+        run: uv run --with deptry==0.25.1 deptry .
 
       - name: Checkout workflow library (audit-ignore parser)
         if: ${{ inputs.run-audit }}
@@ -251,7 +251,7 @@ jobs:
             # requirements.
             uv export --frozen --no-hashes | grep -v '^-e \.' | \
               python3 "$lib" --file "$AUDIT_IGNORE_FILE" --extra "$AUDIT_IGNORE" --format pip-audit -- \
-              uv run --with pip-audit pip-audit -r /dev/stdin
+              uv run --with pip-audit==2.10.1 pip-audit -r /dev/stdin
           fi
 
       - name: Ruff (lint + format check)
@@ -272,7 +272,7 @@ jobs:
         env:
           UV_PROJECT_ENVIRONMENT: system
         # mypy-baseline provisioned via --with (consumers need not declare it).
-        run: uv run mypy src/ --strict | uv run --with mypy-baseline mypy-baseline filter
+        run: uv run mypy src/ --strict | uv run --with mypy-baseline==0.7.4 mypy-baseline filter
 
       - name: Mypy (baseline burndown nudge)
         if: ${{ inputs.mypy-advisory }}
@@ -293,7 +293,7 @@ jobs:
             echo "mypy-baseline.txt is empty — nothing to burn down, skipping."
             exit 0
           fi
-          uv run --with mypy-baseline mypy-baseline suggest --exit-zero --default-branch origin/main
+          uv run --with mypy-baseline==0.7.4 mypy-baseline suggest --exit-zero --default-branch origin/main
 
       - name: Mypy (static type check)
         if: ${{ !inputs.mypy-advisory }}
@@ -308,7 +308,15 @@ jobs:
         env:
           UV_PROJECT_ENVIRONMENT: system
           BANDIT_SEVERITY: ${{ inputs.bandit-severity }}
-        run: uv run --with 'bandit[toml]' bandit -c pyproject.toml -r src/ --severity-level "$BANDIT_SEVERITY"
+        run: uv run --with 'bandit[toml]==1.9.4' bandit -c pyproject.toml -r src/ --severity-level "$BANDIT_SEVERITY"
+
+      - name: Checkout workflow library (overlay pinning)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          repository: damien-robotsix/robotsix-github-workflows
+          ref: ${{ github.job_workflow_sha }}
+          path: _workflow-lib
+          persist-credentials: false
 
       - name: Run tests
         env:
@@ -318,6 +326,7 @@ jobs:
           PYTEST_NUMPROCESSES: ${{ inputs.pytest-numprocesses }}
           COV_PACKAGE: ${{ inputs.cov-package }}
           COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
+          INSTALL_EXTRAS: ${{ inputs.install-extras }}
         # Docker integration tests (pytest.mark.docker) require the
         # sandbox Docker image and the mill-sandbox-net proxy network
         # — infrastructure that only exists in the full mill deployment,
@@ -340,7 +349,29 @@ jobs:
           # consumer (e.g. a freshly-scaffolded member repo) fails with
           # "pytest: error: unrecognized arguments: --cov" because the plugin
           # is not installed.
-          uv run --with pytest-xdist --with pytest-cov pytest tests/ -n "$PYTEST_NUMPROCESSES" --dist loadscope -x "$@" --tb=long --cov="$COV_PACKAGE" --cov-fail-under="$COVERAGE_THRESHOLD" --cov-report=term-missing --cov-report=xml:coverage.xml
+          # RULE: the --with overlay must never move a locked package.
+          # `uv run --with` resolves overlays WITHOUT uv.lock as a
+          # constraint, so a bare `--with pytest-xdist` pulled pytest 9.2.0
+          # over a lock pinning 9.1.1 (2026-10-28 incident).
+          # scripts/uv_with_pins.py reads the exported lock and pins pytest,
+          # pytest-asyncio, pluggy and coverage to their locked versions, and
+          # pytest-xdist / pytest-cov to the locked version (no-op overlay)
+          # or a fixed fallback. A plugin missing from the lock warns until
+          # the script's FLIP_DATE, then fails — lock both in the dev group.
+          # The export mirrors python-setup's `uv sync --frozen --extra …` so
+          # tools locked in an optional extra are pinned too; pipefail makes
+          # a failing `uv export` abort the step instead of feeding the
+          # script empty input (which would yield an unpinned overlay).
+          set -o pipefail
+          trap 'rm -rf _workflow-lib' EXIT
+          extras=()
+          for x in $INSTALL_EXTRAS; do
+            extras+=(--extra "$x")
+          done
+          overlay=$(uv export --frozen --no-hashes --no-emit-project "${extras[@]}" | python3 _workflow-lib/scripts/uv_with_pins.py)
+          rm -rf _workflow-lib
+          mapfile -t overlay_args <<< "$overlay"
+          uv run "${overlay_args[@]}" pytest tests/ -n "$PYTEST_NUMPROCESSES" --dist loadscope -x "$@" --tb=long --cov="$COV_PACKAGE" --cov-fail-under="$COVERAGE_THRESHOLD" --cov-report=term-missing --cov-report=xml:coverage.xml
 
       - name: Combine coverage data
         env:
@@ -349,7 +380,7 @@ jobs:
         # files produced by pytest-cov with parallel=true into a single
         # .coverage database.  In non-parallel mode there is nothing to
         # combine and coverage exits 1 — || true makes this a no-op.
-        run: uv run --with coverage coverage combine || true
+        run: uv run --with coverage==7.17.0 coverage combine || true
 
       - name: Assert coverage database exists
         # coverage.xml is a *report*, not a data file — every downstream
@@ -446,7 +477,7 @@ jobs:
         if: ${{ inputs.run-deptry }}
         env:
           UV_PROJECT_ENVIRONMENT: system
-        run: uv run --with deptry deptry .
+        run: uv run --with deptry==0.25.1 deptry .
 
       - name: Checkout workflow library (audit-ignore parser)
         if: ${{ inputs.run-audit }}
@@ -472,7 +503,7 @@ jobs:
           else
             uv export --frozen --no-hashes | grep -v '^-e \.' | \
               python3 "$lib" --file "$AUDIT_IGNORE_FILE" --extra "$AUDIT_IGNORE" --format pip-audit -- \
-              uv run --with pip-audit pip-audit -r /dev/stdin
+              uv run --with pip-audit==2.10.1 pip-audit -r /dev/stdin
           fi
 
       - name: Ruff (lint + format check)
@@ -499,13 +530,13 @@ jobs:
         if: ${{ inputs.mypy-advisory }}
         env:
           UV_PROJECT_ENVIRONMENT: system
-        run: uv run mypy src/ --strict | uv run --with mypy-baseline mypy-baseline filter
+        run: uv run mypy src/ --strict | uv run --with mypy-baseline==0.7.4 mypy-baseline filter
 
       - name: Mypy (baseline burndown nudge)
         if: ${{ inputs.mypy-advisory }}
         env:
           UV_PROJECT_ENVIRONMENT: system
-        run: uv run --with mypy-baseline mypy-baseline suggest --exit-zero --default-branch origin/main
+        run: uv run --with mypy-baseline==0.7.4 mypy-baseline suggest --exit-zero --default-branch origin/main
 
       - name: Mypy (static type check)
         if: ${{ !inputs.mypy-advisory }}
@@ -518,7 +549,7 @@ jobs:
         env:
           UV_PROJECT_ENVIRONMENT: system
           BANDIT_SEVERITY: ${{ inputs.bandit-severity }}
-        run: uv run --with 'bandit[toml]' bandit -c pyproject.toml -r src/ --severity-level "$BANDIT_SEVERITY"
+        run: uv run --with 'bandit[toml]==1.9.4' bandit -c pyproject.toml -r src/ --severity-level "$BANDIT_SEVERITY"
 
   test:
     if: ${{ inputs.job_split }}
@@ -542,6 +573,14 @@ jobs:
             exit 1
           fi
 
+      - name: Checkout workflow library (overlay pinning)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          repository: damien-robotsix/robotsix-github-workflows
+          ref: ${{ github.job_workflow_sha }}
+          path: _workflow-lib
+          persist-credentials: false
+
       - name: Run tests
         env:
           UV_PROJECT_ENVIRONMENT: system
@@ -550,9 +589,20 @@ jobs:
           PYTEST_NUMPROCESSES: ${{ inputs.pytest-numprocesses }}
           COV_PACKAGE: ${{ inputs.cov-package }}
           COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
+          INSTALL_EXTRAS: ${{ inputs.install-extras }}
         run: |
           eval "set -- $PYTEST_EXTRA_ARGS"
-          uv run --with pytest-xdist --with pytest-cov pytest tests/ -n "$PYTEST_NUMPROCESSES" --dist loadscope -x "$@" --tb=long --cov="$COV_PACKAGE" --cov-fail-under="$COVERAGE_THRESHOLD" --cov-report=term-missing --cov-report=xml:coverage.xml
+          # Overlay pinned to the lock — see the tests job's Run tests step.
+          set -o pipefail
+          trap 'rm -rf _workflow-lib' EXIT
+          extras=()
+          for x in $INSTALL_EXTRAS; do
+            extras+=(--extra "$x")
+          done
+          overlay=$(uv export --frozen --no-hashes --no-emit-project "${extras[@]}" | python3 _workflow-lib/scripts/uv_with_pins.py)
+          rm -rf _workflow-lib
+          mapfile -t overlay_args <<< "$overlay"
+          uv run "${overlay_args[@]}" pytest tests/ -n "$PYTEST_NUMPROCESSES" --dist loadscope -x "$@" --tb=long --cov="$COV_PACKAGE" --cov-fail-under="$COVERAGE_THRESHOLD" --cov-report=term-missing --cov-report=xml:coverage.xml
 
       - name: Combine coverage data
         env:
@@ -561,7 +611,7 @@ jobs:
         # files produced by pytest-cov with parallel=true into a single
         # .coverage database.  In non-parallel mode there is nothing to
         # combine and coverage exits 1 — || true makes this a no-op.
-        run: uv run --with coverage coverage combine || true
+        run: uv run --with coverage==7.17.0 coverage combine || true
 
       - name: Assert coverage database exists
         # coverage.xml is a *report*, not a data file — every downstream
