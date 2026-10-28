@@ -89,6 +89,17 @@ Commit subjects and PR titles must follow the
 `CHANGELOG.md` from these commit messages — do **not** add changelog
 fragments or use towncrier.
 
+## Workflow conventions
+
+### Pin every `uv run --with <tool>` overlay
+
+Every `uv run --with <tool>` in a reusable workflow must pin the tool to an
+explicit version, or to the version read from the caller's lock via
+`uv export --frozen`.  Never leave an overlay unpinned, because it resolves
+outside the project lock.  For example, on 2026-10-28 an unpinned
+`--with pytest-xdist` overlay in `python-ci.yml` pulled pytest 9.2.0 over the
+locked pytest 9.1.1 in robotsix-cost-monitor's CI.
+
 ## Security lint suppressions
 
 ### Suppress zizmor findings inline, never file-wide
