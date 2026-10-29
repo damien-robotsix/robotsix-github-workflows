@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.5.0](https://github.com/damien-robotsix/robotsix-github-workflows/compare/v1.4.0...v1.5.0) (2026-10-29)
+
+
+### Features
+
+* Add a run-vulture input (dead-code gate) to the reusable python-ci.yml (20261028T050157Z-add-a-run-vulture-input-dead-code-gate-t-09d1) ([#263](https://github.com/damien-robotsix/robotsix-github-workflows/issues/263)) ([f4c4f2d](https://github.com/damien-robotsix/robotsix-github-workflows/commit/f4c4f2d69ec58a0deefbd086c99b44f51a5928a7))
+* Add uv-audit SARIF upload and uv lock --check freshness inputs to the reusable python-ci.yml (replace three hand-rolled inline uv-audit jobs) (20261027T105759Z-add-uv-audit-sarif-upload-and-uv-lock-ch-7e64) [WIP] ([#258](https://github.com/damien-robotsix/robotsix-github-workflows/issues/258)) ([84527a1](https://github.com/damien-robotsix/robotsix-github-workflows/commit/84527a1246a936243110af89a461e2eeb0c53750))
+* lint-dockerfile.yml: add an opt-in upload-sarif input so migrated callers keep hadolint findings in Code Scanning (20261027T152332Z-lint-dockerfile-yml-add-an-opt-in-upload-764f) ([#262](https://github.com/damien-robotsix/robotsix-github-workflows/issues/262)) ([3934fbd](https://github.com/damien-robotsix/robotsix-github-workflows/commit/3934fbd9ccb11981f81b9886569ebaed7fcdd5f7))
+* runs-on input for lint-workflows, lint-dockerfile and dependabot-auto-merge ([#266](https://github.com/damien-robotsix/robotsix-github-workflows/issues/266)) ([16d2c4b](https://github.com/damien-robotsix/robotsix-github-workflows/commit/16d2c4b6df1564c4c1668f9fa830b6ffb67b89ae))
+
+
+### Bug Fixes
+
+* **lint-workflows:** set up Python before the lint scripts so they run on self-hosted runners ([#267](https://github.com/damien-robotsix/robotsix-github-workflows/issues/267)) ([8757a49](https://github.com/damien-robotsix/robotsix-github-workflows/commit/8757a4986e5bf17c100832cf76495ce6e8a7a06a))
+* python-ci.yml: `uv run --with pytest-xdist` overlays an UNLOCKED pytest (9.2.0 since 2026-10-27) over the caller's lock — pin the overlay to the lock / require xdist+cov to be locked (20261028T061557Z-python-ci-yml-uv-run-with-pytest-xdist-o-bc12) ([#264](https://github.com/damien-robotsix/robotsix-github-workflows/issues/264)) ([271b850](https://github.com/damien-robotsix/robotsix-github-workflows/commit/271b8509760efe549183cb5d1735d3cd754dafd1))
+
 ## [1.4.0](https://github.com/damien-robotsix/robotsix-github-workflows/compare/v1.3.0...v1.4.0) (2026-10-27)
 
 
