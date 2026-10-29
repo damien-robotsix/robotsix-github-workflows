@@ -68,7 +68,11 @@ No secrets.
 
 ## `dependabot-auto-merge.yml`
 
-No inputs.  No secrets.
+| Input | Type | Default | Description |
+|---|---|---|---|
+| `runs-on` | string | `ubuntu-latest` | Runner label for every job; `self-hosted` for a private repo without GitHub-hosted minutes. |
+
+The App-token inputs (`app-id`, secret `app-private-key`) are documented in the workflow file.
 
 ## `deps-bump.yml`
 
@@ -144,6 +148,7 @@ Callers either pass `secrets: inherit` or, to supply `build-secrets`, an explici
 | Input | Type | Default | Description |
 |---|---|---|---|
 | `run-actionlint` | boolean | `false` | Run actionlint on workflow files. |
+| `runs-on` | string | `ubuntu-latest` | Runner label for every job; `self-hosted` for a private repo without GitHub-hosted minutes. |
 | `run-zizmor` | boolean | `false` | Run zizmor security audit. |
 | `sarif-workflows` | string | `codeql.yml scan-container.yml scorecard.yml` | Workflow basenames requiring security-events:write. |
 | `dockerfiles` | string | `""` | Space-separated Dockerfile paths whose `FROM` lines must be digest-pinned (e.g. `Dockerfile sandbox/Dockerfile`). Empty skips the check. |
@@ -198,6 +203,7 @@ annotation are reported as warnings, or fail the job when
 | `failure-threshold` | string | `warning` | Fail only on rules at or above this severity (`error`, `warning`, `info`, `style`, `ignore`). |
 | `config` | string | `""` | Path to a hadolint config file. Empty uses hadolint's default config discovery. |
 | `upload-sarif` | boolean | `false` | Also run hadolint with `format: sarif` in a separate `hadolint-sarif` job and upload `hadolint.sarif` to code scanning (`github/codeql-action/upload-sarif`, category `hadolint`). The job applies the same `failure-threshold`. |
+| `runs-on` | string | `ubuntu-latest` | Runner label for every job; `self-hosted` for a private repo without GitHub-hosted minutes. |
 
 No secrets.
 
