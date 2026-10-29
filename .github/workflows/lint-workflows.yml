@@ -3,6 +3,13 @@ name: Lint Workflows
 on:
   workflow_call:
     inputs:
+      runs-on:
+        description: >
+          Runner label for every job (e.g. "self-hosted" for a private repo
+          whose GitHub-hosted minutes are unavailable).
+        required: false
+        type: string
+        default: "ubuntu-latest"
       run-actionlint:
         description: Whether to run actionlint on workflow files.
         required: false
@@ -70,7 +77,7 @@ permissions:
 jobs:
   check-permissions:
     name: Check permissions
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
     permissions:
       contents: read
     steps:
@@ -100,7 +107,7 @@ jobs:
   dockerfile-pins:
     name: Dockerfile digest pins
     if: ${{ inputs.dockerfiles != '' }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
     permissions:
       contents: read
     steps:
@@ -129,7 +136,7 @@ jobs:
   workflow-rules:
     name: Workflow rules
     if: ${{ inputs.run-workflow-rules }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
     permissions:
       contents: read
     steps:
@@ -154,7 +161,7 @@ jobs:
   trivyignore-expiry:
     name: Trivyignore expiry
     if: ${{ inputs.trivyignore != '' }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
     permissions:
       contents: read
     steps:
@@ -182,7 +189,7 @@ jobs:
   actionlint:
     name: Actionlint
     if: ${{ inputs.run-actionlint }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
     permissions:
       contents: read
     steps:
@@ -200,7 +207,7 @@ jobs:
   zizmor:
     name: Zizmor
     if: ${{ inputs.run-zizmor }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
     permissions:
       contents: read
     steps:

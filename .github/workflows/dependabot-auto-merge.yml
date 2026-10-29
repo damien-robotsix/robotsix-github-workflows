@@ -6,6 +6,13 @@ name: Dependency Bot Auto-Merge
 on:
   workflow_call:
     inputs:
+      runs-on:
+        description: >
+          Runner label for every job (e.g. "self-hosted" for a private repo
+          whose GitHub-hosted minutes are unavailable).
+        required: false
+        type: string
+        default: "ubuntu-latest"
       app-id:
         description: >
           Optional GitHub App ID. When set (paired with the app-private-key
@@ -31,7 +38,7 @@ permissions:
 jobs:
   auto-merge:
     name: Auto-merge
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
     # pull_request_target is accepted because dependabot-triggered
     # pull_request runs only receive Dependabot-scoped secrets — a caller
     # that passes app-private-key (an Actions secret) must trigger on

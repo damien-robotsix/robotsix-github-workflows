@@ -8,6 +8,13 @@ name: Lint Dockerfile
 on:
   workflow_call:
     inputs:
+      runs-on:
+        description: >
+          Runner label for every job (e.g. "self-hosted" for a private repo
+          whose GitHub-hosted minutes are unavailable).
+        required: false
+        type: string
+        default: "ubuntu-latest"
       dockerfiles:
         description: >-
           Space-separated list of Dockerfile paths or glob patterns, relative
@@ -54,7 +61,7 @@ on:
 jobs:
   hadolint:
     name: Hadolint
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
     permissions:
       contents: read
     steps:
@@ -104,7 +111,7 @@ jobs:
     # workflow-level comment above).
     if: ${{ inputs.upload-sarif }}
     name: Hadolint (SARIF)
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
         with:
