@@ -84,6 +84,28 @@ jobs:
       - name: Enforce AGENT.md workflow rules (SHA pins, static defaults, persist-credentials)
         run: python3 scripts/check_workflow_rules.py
 
+  python-lint:
+    name: Lint and type-check Python scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: "3.14"
+      - name: Install lint dependencies
+        # Keep these versions in sync with the ruff-pre-commit / mirrors-mypy
+        # revs and additional_dependencies in .pre-commit-config.yaml.
+        run: |
+          python3 -m pip install --quiet ruff==0.17.3 mypy==2.4.0 types-PyYAML==6.0.12.20260906
+      - name: Run ruff
+        # Rule set lives in pyproject.toml ([tool.ruff]).
+        run: python3 -m ruff check scripts
+      - name: Run mypy
+        # Target files and strictness live in pyproject.toml ([tool.mypy]).
+        run: python3 -m mypy
+
   pytest:
     name: Run Python unit test suites
     runs-on: ubuntu-latest

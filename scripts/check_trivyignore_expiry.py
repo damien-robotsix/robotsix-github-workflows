@@ -103,7 +103,7 @@ def main(argv: list[str] | None = None) -> int:
         help="override today's date (YYYY-MM-DD); defaults to the UTC date",
     )
     args = parser.parse_args(argv)
-    today = args.today or dt.datetime.now(dt.UTC).date()
+    today = args.today or dt.datetime.now(dt.timezone.utc).date()
 
     total = Result()
     for p in args.paths:
