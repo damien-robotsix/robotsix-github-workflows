@@ -8,8 +8,20 @@ Consumers reference these SHA-pinned, e.g.:
 ```yaml
 jobs:
   tests:
-    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/python-ci.yml@<sha>
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/python-ci.yml@<sha-of-vX.Y.Z> # vX.Y.Z
 ```
+
+**Pinning.** Every `uses:` ref must be a 40-char commit SHA followed by a
+`# vX.Y.Z` comment, e.g.
+`python-ci.yml@86a722f2938c1dda343bbf8d3c5989613cbf1794 # v1.5.0`
+([WORKFLOW-AUTHORING Rule 1](docs/WORKFLOW-AUTHORING.md);
+enforced by the `sha-pin` check in `scripts/check_workflow_rules.py`, which
+rejects unlabelled refs and `# main`). Resolve the SHA for a tag with
+`git ls-remote https://github.com/damien-robotsix/robotsix-github-workflows "refs/tags/vX.Y.Z^{}" "refs/tags/vX.Y.Z"`
+(prefer the peeled `^{}` line). Keep the comment version-shaped: Dependabot's
+`github-actions` ecosystem only updates `# vX.Y.Z` comments, so `# main`,
+SHA or date labels go stale. The `<sha-of-vX.Y.Z> # vX.Y.Z` placeholders in
+the examples below follow this form.
 
 | Workflow | Purpose |
 |---|---|
@@ -60,7 +72,7 @@ on:
 
 jobs:
   release:
-    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/auto-release.yml@<sha>
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/auto-release.yml@<sha-of-vX.Y.Z> # vX.Y.Z
     # Preferred: authenticate as a GitHub App (no expiry, bot identity).
     # The installation token is minted inside the reusable workflow —
     # app tokens live ~1h, so they cannot be a static secret, and
@@ -105,7 +117,7 @@ on:
   workflow_dispatch:
 jobs:
   release:
-    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/release-please.yml@<sha>
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/release-please.yml@<sha-of-vX.Y.Z> # vX.Y.Z
     with:
       app-id: ${{ vars.RELEASE_APP_ID }}  # repo/org variable, not a secret
     # Optional inputs — defaults shown:
@@ -139,7 +151,7 @@ on:
 
 jobs:
   scan:
-    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/docker-pr-scan.yml@<sha>
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/docker-pr-scan.yml@<sha-of-vX.Y.Z> # vX.Y.Z
     # Optional overrides — omit if your Dockerfile is ./Dockerfile
     # and your image name is ghcr.io/<owner>/<repo>:
     # with:
@@ -178,7 +190,7 @@ on:
 
 jobs:
   tests:
-    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/python-ci.yml@<sha>
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/python-ci.yml@<sha-of-vX.Y.Z> # vX.Y.Z
     permissions:
       contents: read
     # All inputs are optional — defaults shown in comments:
@@ -235,7 +247,7 @@ on:
 
 jobs:
   docs:
-    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/python-docs.yml@<sha>
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/python-docs.yml@<sha-of-vX.Y.Z> # vX.Y.Z
     permissions:
       contents: read
       pages: write       # required for Pages deploy
@@ -264,7 +276,7 @@ on:
 
 jobs:
   mutate:
-    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/mutation-test.yml@<sha>
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/mutation-test.yml@<sha-of-vX.Y.Z> # vX.Y.Z
     permissions:
       contents: read
     # All inputs are optional — defaults shown in comments:
@@ -305,7 +317,7 @@ on:
   workflow_dispatch:
 jobs:
   rescan:
-    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/scan-container.yml@<sha>
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/scan-container.yml@<sha-of-vX.Y.Z> # vX.Y.Z
     # with:
     #   image-name: "ghcr.io/<owner>/<repo>:main"  # default: ghcr.io/$GITHUB_REPOSITORY:main
     permissions:
@@ -330,7 +342,7 @@ permissions:
   contents: read
 jobs:
   scorecard:
-    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/scorecard.yml@<sha>
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/scorecard.yml@<sha-of-vX.Y.Z> # vX.Y.Z
     permissions:
       # Required — SARIF upload to code scanning.
       security-events: write
@@ -356,7 +368,7 @@ on:
 
 jobs:
   publish:
-    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/docker-release.yml@<sha>
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/docker-release.yml@<sha-of-vX.Y.Z> # vX.Y.Z
     # Optional overrides — omit if your Dockerfile is ./Dockerfile
     # and your image name is ghcr.io/<owner>/<repo>:
     # with:
@@ -393,7 +405,7 @@ on:
 
 jobs:
   baseline:
-    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/baseline-check.yml@<sha>
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/baseline-check.yml@<sha-of-vX.Y.Z> # vX.Y.Z
     with:
       # Set true when this repo builds and pushes a container image.
       # The check then additionally requires package-ecosystem: docker
@@ -427,7 +439,7 @@ on:
 
 jobs:
   config-ownership:
-    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/config-ownership-check.yml@<sha>
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/config-ownership-check.yml@<sha-of-vX.Y.Z> # vX.Y.Z
     # All inputs are optional — defaults shown in comments:
     # with:
     #   deploy-config-glob: "deploy/**/*.{yml,yaml} **/docker-compose*.{yml,yaml} kubernetes/**/*.{yml,yaml} helm/**/*.{yml,yaml}"
@@ -466,7 +478,7 @@ permissions:
   contents: read
 jobs:
   codeql:
-    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/codeql.yml@<sha>
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/codeql.yml@<sha-of-vX.Y.Z> # vX.Y.Z
     # All inputs are optional — defaults shown in comments:
     # with:
     #   languages: "python"                   # default
@@ -518,7 +530,7 @@ permissions:
   contents: read
 jobs:
   dependency-review:
-    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/dependency-review.yml@<sha>
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/dependency-review.yml@<sha-of-vX.Y.Z> # vX.Y.Z
     # All inputs are optional — defaults shown in comments:
     # with:
     #   fail-on-severity: "moderate"          # default
@@ -562,7 +574,7 @@ on:
   workflow_dispatch:
 jobs:
   bump:
-    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/bump.yml@<sha>
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/bump.yml@<sha-of-vX.Y.Z> # vX.Y.Z
     with:
       bump-mode: "deps"   # "deps" = uv lock --upgrade-package; "pins" = scripts/pin-bump.py per-repo
       packages: "robotsix-mill robotsix-llmio"  # space-separated; omit for "pins" to bump all git-sourced
@@ -596,7 +608,7 @@ on:
   workflow_dispatch:
 jobs:
   bump:
-    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/deps-bump.yml@<sha>
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/deps-bump.yml@<sha-of-vX.Y.Z> # vX.Y.Z
     with:
       packages: "robotsix-mill robotsix-llmio"  # space-separated first-party packages
       app-id: "3752211"  # fleet GitHub App
@@ -617,7 +629,7 @@ on:
 
 jobs:
   auto-merge:
-    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/dependabot-auto-merge.yml@<sha>
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/dependabot-auto-merge.yml@<sha-of-vX.Y.Z> # vX.Y.Z
 ```
 
 The workflow declares no inputs and no secrets.  The calling job needs
@@ -641,7 +653,7 @@ on:
   pull_request:
 jobs:
   lint-workflows:
-    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/lint-workflows.yml@<sha>
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/lint-workflows.yml@<sha-of-vX.Y.Z> # vX.Y.Z
     with:
       run-actionlint: true
       run-zizmor: true
@@ -667,7 +679,7 @@ on:
   pull_request:
 jobs:
   hadolint:
-    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/lint-dockerfile.yml@<sha>
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/lint-dockerfile.yml@<sha-of-vX.Y.Z> # vX.Y.Z
     with:
       dockerfiles: "Dockerfile Dockerfile.dev"  # space-separated paths/globs; default "Dockerfile"
       # failure-threshold: warning  # default
@@ -684,7 +696,7 @@ that leave `upload-sarif` off need no extra permission):
 ```yaml
 jobs:
   hadolint:
-    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/lint-dockerfile.yml@<sha>
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/lint-dockerfile.yml@<sha-of-vX.Y.Z> # vX.Y.Z
     permissions:
       contents: read
       security-events: write
@@ -705,7 +717,7 @@ on:
   workflow_dispatch:
 jobs:
   bump:
-    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/pin-bump.yml@<sha>
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/pin-bump.yml@<sha-of-vX.Y.Z> # vX.Y.Z
     with:
       packages: "robotsix-mill robotsix-llmio"  # space-separated subset of git-pinned names (`[tool.uv.sources]` or PEP 508 `name @ git+URL@<sha>`); omit for all
       app-id: "3752211"  # fleet GitHub App
@@ -726,7 +738,7 @@ on:
   workflow_dispatch:
 jobs:
   sweep:
-    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/pin-bump-sweep.yml@<sha>
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/pin-bump-sweep.yml@<sha-of-vX.Y.Z> # vX.Y.Z
     with:
       owner: "damien-robotsix"  # GitHub org/owner to sweep; default shown
       app-id: "3752211"  # fleet GitHub App
@@ -757,7 +769,7 @@ on:
 
 jobs:
   security:
-    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/python-security.yml@<sha>
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/python-security.yml@<sha-of-vX.Y.Z> # vX.Y.Z
     # All inputs are optional — defaults shown:
     # with:
     #   python-version: "3.14"
