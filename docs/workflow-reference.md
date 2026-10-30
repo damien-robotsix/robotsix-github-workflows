@@ -347,6 +347,8 @@ states the accepted alternatives in its response header:
 | `run-vulture` | boolean | `false` | Add a separate `vulture` job running `uv run vulture` (vulture `2.16`, provisioned via `--with`) as a dead-code gate. The job declares its own `contents: read` permissions — callers need grant nothing extra. |
 | `vulture-args` | string | `""` | Arguments passed verbatim to vulture (shell quoting honoured), e.g. `src/ vulture_whitelist.py --min-confidence 80 --ignore-decorators "@field_validator,@model_validator"`. Empty → vulture reads `[tool.vulture]` from `pyproject.toml`. |
 | `job_split` | boolean | `false` | Split into parallel lint/type/test jobs. |
+| `pre-test-command` | string | `""` | Shell snippet run (bash `eval`, `UV_PROJECT_ENVIRONMENT=system`) after `uv sync --frozen` and before lint/type/test in the job that runs pytest (`tests`, or `test` when `job_split`), e.g. `uv run playwright install --with-deps chromium`. Empty → step skipped. |
+| `extra-check-command` | string | `""` | Repo-specific check (bash `eval`) run after Ruff in `tests` (or `lint` when `job_split`), e.g. a config-schema drift check; non-zero exit fails the job. Empty → step skipped. |
 
 No secrets.
 

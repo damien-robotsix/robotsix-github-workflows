@@ -222,12 +222,34 @@ jobs:
     #     # `uv run vulture` (vulture 2.16) as a dead-code gate; job needs only contents: read.
     #   vulture-args: ""                          # default — empty reads [tool.vulture] from
     #     # pyproject.toml; else passed verbatim, e.g. `src/ vulture_whitelist.py --min-confidence 80`.
+    #   pre-test-command: ""                      # default — shell snippet run after `uv sync`
+    #     # and before lint/type/test in the job that runs pytest (Tests, or Test when
+    #     # job_split), e.g. "uv run playwright install --with-deps chromium".
+    #   extra-check-command: ""                   # default — repo-specific gate run after Ruff
+    #     # (Tests, or Lint when job_split), e.g. a config-schema drift check.
     #   job_split: false                          # default — single monolithic Tests job
     #     # When true, emits three parallel jobs (Lint, Type Check, Test)
     #     # instead of one sequential Tests job.  Each reports its own
     #     # green/red status check, reducing CI wall-clock time from
     #     # ~sum-of-all to ~max-of-three.
 ```
+
+Repos whose tests need extra runtime setup (e.g. Playwright browsers) or a
+repo-specific gate can still adopt the shared workflow:
+
+```yaml
+jobs:
+  tests:
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/python-ci.yml@<sha>
+    permissions:
+      contents: read
+    with:
+      pre-test-command: uv run playwright install --with-deps chromium
+      extra-check-command: uv run python scripts/check_config_schema.py
+```
+
+Both inputs reach the shell through `env:` (never `${{ }}` in `run:`) and run
+with `UV_PROJECT_ENVIRONMENT=system`, so `uv run` targets the synced env.
 
 See [Workflow Reference](docs/workflow-reference.md) for all inputs, including the
 `.audit-ignore` convention for suppressing advisories.
