@@ -2,3 +2,21 @@
 testpaths = ["tests"]
 python_files = ["test-*.py"]
 addopts = "--import-mode=importlib"
+
+[tool.ruff]
+# Scripts run on consumer runners whose interpreter may predate 3.11
+# (pin-bump.py keeps a ``tomllib`` fallback), so target the oldest supported.
+target-version = "py310"
+line-length = 100
+src = ["scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+# Long lines are embedded shell/Dockerfile snippets and docstrings where
+# wrapping hurts readability; line length is not a correctness signal.
+ignore = ["E501"]
+
+[tool.mypy]
+files = ["scripts"]
+python_version = "3.10"
+check_untyped_defs = true

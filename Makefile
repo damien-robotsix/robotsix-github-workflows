@@ -14,5 +14,5 @@ shell-tests:  ## Run shell test scripts
 	bash tests/test-config-ownership-check.sh
 	bash tests/test-baseline-check.sh
 
-lint:  ## Run pre-commit hooks (actionlint, yamllint, shellcheck)
+lint:  ## Run pre-commit hooks (actionlint, yamllint, shellcheck, ruff, mypy)
 	pre-commit run --all-files

@@ -8,6 +8,20 @@ repos:
   - repo: https://github.com/shellcheck-py/shellcheck-py
     rev: v0.11.0.1
     hooks: [{ id: shellcheck }]
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.3
+    hooks:
+      - id: ruff-check
+        files: ^scripts/.*\.py$
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v2.4.0
+    hooks:
+      - id: mypy
+        # Run against [tool.mypy] files = ["scripts"] in pyproject.toml so the
+        # whole package is checked with the same config CI uses.
+        pass_filenames: false
+        files: ^(scripts/.*\.py|pyproject\.toml)$
+        additional_dependencies: ["types-PyYAML==6.0.12.20260906"]
   - repo: local
     hooks:
       - id: check-workflow-rules
