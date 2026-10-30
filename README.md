@@ -240,7 +240,7 @@ repo-specific gate can still adopt the shared workflow:
 ```yaml
 jobs:
   tests:
-    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/python-ci.yml@<sha>
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/python-ci.yml@<sha-of-vX.Y.Z> # vX.Y.Z
     permissions:
       contents: read
     with:
