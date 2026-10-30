@@ -74,6 +74,24 @@ No secrets.
 
 The App-token inputs (`app-id`, secret `app-private-key`) are documented in the workflow file.
 
+## `dependency-review.yml`
+
+Runs [`actions/dependency-review-action`](https://github.com/actions/dependency-review-action)
+on pull requests to block newly introduced vulnerable or disallowed-license
+dependencies. The job is skipped on non-`pull_request` events.
+
+| Input | Type | Default | Description |
+|---|---|---|---|
+| `fail-on-severity` | string | `moderate` | Lowest vulnerability severity that fails the check (`low`, `moderate`, `high`, `critical`). Inline inputs take precedence over `config-file`. |
+| `config-file` | string | `""` | Path to a dependency-review-action config file (e.g. `.github/dependency-review-config.yml`). Empty = no config file; the caller repo is checked out only when set. |
+| `deny-licenses` | string | `""` | Comma-separated SPDX identifiers that fail the check. Mutually exclusive with `allow-licenses`. |
+| `allow-licenses` | string | `""` | Comma-separated SPDX identifiers that are the only ones allowed. Mutually exclusive with `deny-licenses`. |
+| `comment-summary-in-pr` | boolean | `true` | Post the review summary as a PR comment. |
+| `runs-on` | string | `ubuntu-latest` | Runner label for the job. |
+
+No secrets. The job requests `contents: read` and `pull-requests: write`
+(for the PR summary comment).
+
 ## `deps-bump.yml`
 
 | Input | Type | Default | Description |
