@@ -203,6 +203,8 @@ jobs:
     #   pytest-args: '-m "not docker"'            # default
     #   pytest-numprocesses: "auto"               # default
     #   runs-on: "ubuntu-latest"                  # default
+    #   test-timeout-minutes: 15                  # default — job timeout for the tests/test jobs
+    #     # (fleet default 15). Raise only for slow suites; every other job has a fixed ceiling.
     #   run-deptry: true                          # default
     #   run-audit: true                           # default
     #   run-bandit: true                          # default
@@ -389,6 +391,12 @@ jobs:
 The `packages: write`, `id-token: write`, `attestations: write`, and `security-events: write` permissions are declared inside the reusable workflow and do not need to be re-declared in the caller. Secrets are passed via `secrets: inherit` so `GITHUB_TOKEN` is available for GHCR login.
 
 Both the component base push-by-digest (Stage 1, retried only when its first push fails) and the hardened-image push (Stage 2) are retried up to `push-retries` extra times (default `3`, must be 0–10) with a short back-off, because GHCR intermittently fails a push mid-stream with `unknown blob`. The retry loops live inside the push steps, so the Trivy gate, smoke test and provenance/SBOM attestations run once, against the image that was actually published.
+
+Every job in the reusable workflows declares `timeout-minutes` (fleet default 15).
+The `publish` job in `docker-release.yml` is the exception at 20 minutes, because
+large base-layer pulls, the multi-arch build and the Trivy scan can exceed 15 minutes.
+Callers cannot override a `uses:` job's timeout, so raise the ceiling in the
+reusable workflow itself, not in the caller.
 
 ## `baseline-check.yml` — caller template
 

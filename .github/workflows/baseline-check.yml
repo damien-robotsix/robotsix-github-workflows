@@ -38,6 +38,7 @@ jobs:
   baseline:
     name: Baseline
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -183,6 +184,7 @@ jobs:
     name: Modules drift
     if: ${{ inputs.has-board }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
