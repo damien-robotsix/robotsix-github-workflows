@@ -145,6 +145,28 @@ on:
         required: false
         type: boolean
         default: false
+      pre-test-command:
+        description: >-
+          Optional shell snippet run (via bash eval, with
+          UV_PROJECT_ENVIRONMENT=system) right after python-setup's
+          `uv sync --frozen` and before the lint/type/test steps, in every job
+          that runs pytest (the Tests job, or the Test job when job_split is
+          true). Use it for extra runtime setup, e.g.
+          `uv run playwright install --with-deps chromium`. Passed through
+          `env:`, never interpolated into `run:`. Default "" — step skipped.
+        required: false
+        type: string
+        default: ""
+      extra-check-command:
+        description: >-
+          Optional shell snippet run (via bash eval, with
+          UV_PROJECT_ENVIRONMENT=system) after the Ruff lint step — in the
+          Tests job, or the Lint job when job_split is true. Use it for a
+          repo-specific gate such as a config-schema drift check; a non-zero
+          exit fails the job. Default "" — step skipped.
+        required: false
+        type: string
+        default: ""
 
 # No workflow-level `permissions:` block on purpose. Every job except
 # audit-sarif declares its own least-privilege block. audit-sarif declares
@@ -173,6 +195,13 @@ jobs:
           python-version: ${{ inputs.python-version }}
           uv-version: ${{ inputs.uv-version }}
           install-extras: ${{ inputs.install-extras }}
+
+      - name: Pre-test setup (pre-test-command)
+        if: ${{ inputs.pre-test-command != '' }}
+        env:
+          UV_PROJECT_ENVIRONMENT: system
+          PRE_TEST_COMMAND: ${{ inputs.pre-test-command }}
+        run: eval "$PRE_TEST_COMMAND"
 
       - name: Lockfile freshness (uv lock --check)
         if: ${{ inputs.check-lock }}
@@ -260,6 +289,13 @@ jobs:
         run: |
           uv run ruff check --output-format=github .
           uv run ruff format --check --diff .
+
+      - name: Extra check (extra-check-command)
+        if: ${{ inputs.extra-check-command != '' }}
+        env:
+          UV_PROJECT_ENVIRONMENT: system
+          EXTRA_CHECK_COMMAND: ${{ inputs.extra-check-command }}
+        run: eval "$EXTRA_CHECK_COMMAND"
 
       - name: Mypy (static type check, baseline ratchet)
         if: ${{ inputs.mypy-advisory }}
@@ -513,6 +549,13 @@ jobs:
           uv run ruff check --output-format=github .
           uv run ruff format --check --diff .
 
+      - name: Extra check (extra-check-command)
+        if: ${{ inputs.extra-check-command != '' }}
+        env:
+          UV_PROJECT_ENVIRONMENT: system
+          EXTRA_CHECK_COMMAND: ${{ inputs.extra-check-command }}
+        run: eval "$EXTRA_CHECK_COMMAND"
+
   typecheck:
     if: ${{ inputs.job_split }}
     name: Type Check
@@ -563,6 +606,13 @@ jobs:
           python-version: ${{ inputs.python-version }}
           uv-version: ${{ inputs.uv-version }}
           install-extras: ${{ inputs.install-extras }}
+
+      - name: Pre-test setup (pre-test-command)
+        if: ${{ inputs.pre-test-command != '' }}
+        env:
+          UV_PROJECT_ENVIRONMENT: system
+          PRE_TEST_COMMAND: ${{ inputs.pre-test-command }}
+        run: eval "$PRE_TEST_COMMAND"
 
       - name: Enforce coverage floor (hard minimum 80)
         env:
