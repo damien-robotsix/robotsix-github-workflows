@@ -93,6 +93,7 @@ jobs:
   bump:
     name: Bump
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write       # push bump branch
       pull-requests: write  # gh pr create

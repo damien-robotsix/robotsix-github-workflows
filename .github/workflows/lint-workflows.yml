@@ -78,6 +78,7 @@ jobs:
   check-permissions:
     name: Check permissions
     runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -115,6 +116,7 @@ jobs:
     name: Dockerfile digest pins
     if: ${{ inputs.dockerfiles != '' }}
     runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -151,6 +153,7 @@ jobs:
     name: Workflow rules
     if: ${{ inputs.run-workflow-rules }}
     runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -183,6 +186,7 @@ jobs:
     name: Trivyignore expiry
     if: ${{ inputs.trivyignore != '' }}
     runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -218,6 +222,7 @@ jobs:
     name: Actionlint
     if: ${{ inputs.run-actionlint }}
     runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -236,6 +241,7 @@ jobs:
     name: Zizmor
     if: ${{ inputs.run-zizmor }}
     runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
