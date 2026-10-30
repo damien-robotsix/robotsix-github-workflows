@@ -12,7 +12,10 @@ from pathlib import Path
 import pytest
 
 # ---------------------------------------------------------------------------
-# Load the pin-bump module (filename contains a hyphen — can't use plain import)
+# Load the pin-bump modules.  ``pin-bump.py`` (CLI + per-repo mode) has a
+# hyphen in its name so it is loaded by path; loading it puts ``scripts/`` on
+# ``sys.path``, so its sibling modules ``pin_bump_common`` (shared helpers)
+# and ``pin_bump_sweep`` (fleet sweep mode) import normally.
 # ---------------------------------------------------------------------------
 _scripts_dir = Path(__file__).resolve().parent.parent / "scripts"
 _spec = importlib.util.spec_from_file_location("pin_bump", _scripts_dir / "pin-bump.py")
@@ -20,20 +23,23 @@ assert _spec is not None and _spec.loader is not None
 _pin_bump = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_pin_bump)
 
+import pin_bump_common as _common  # noqa: E402
+import pin_bump_sweep as _sweep  # noqa: E402
+
 # Convenience aliases
-parse_git_sources = _pin_bump.parse_git_sources
-rewrite_revs = _pin_bump.rewrite_revs
-resolve_default_branch_head = _pin_bump.resolve_default_branch_head
+parse_git_sources = _common.parse_git_sources
+rewrite_revs = _common.rewrite_revs
+resolve_default_branch_head = _common.resolve_default_branch_head
 per_repo = _pin_bump.per_repo
-_collect_fleet_pins = _pin_bump._collect_fleet_pins
-_resolve_latest_shas = _pin_bump._resolve_latest_shas
-_compute_repo_bumps = _pin_bump._compute_repo_bumps
-_apply_pin_bump = _pin_bump._apply_pin_bump
-_normalize_git_url = _pin_bump._normalize_git_url
-_build_first_party_graph = _pin_bump._build_first_party_graph
-_topological_sort = _pin_bump._topological_sort
-_get_fleet_dep_bumps = _pin_bump._get_fleet_dep_bumps
-sweep = _pin_bump.sweep
+_collect_fleet_pins = _sweep._collect_fleet_pins
+_resolve_latest_shas = _sweep._resolve_latest_shas
+_compute_repo_bumps = _sweep._compute_repo_bumps
+_apply_pin_bump = _sweep._apply_pin_bump
+_normalize_git_url = _common._normalize_git_url
+_build_first_party_graph = _sweep._build_first_party_graph
+_topological_sort = _sweep._topological_sort
+_get_fleet_dep_bumps = _sweep._get_fleet_dep_bumps
+sweep = _sweep.sweep
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -395,7 +401,7 @@ class TestPerRepoIntegration:
         )
 
         # 4. Monkeypatch run() to skip "uv lock"
-        original_run = _pin_bump.run
+        original_run = _common.run
 
         def fake_run(*args: str, **kwargs: object) -> subprocess.CompletedProcess[str]:
             if args and args[0] == "uv":
@@ -404,7 +410,7 @@ class TestPerRepoIntegration:
                 )
             return original_run(*args, **kwargs)
 
-        monkeypatch.setattr(_pin_bump, "run", fake_run)
+        monkeypatch.setattr(_common, "run", fake_run)
 
         # 5. Run per_repo — should detect the bump and return 2
         exit_code = per_repo(pyproject)
@@ -435,7 +441,7 @@ class TestPerRepoIntegration:
         )
 
         # Monkeypatch run() to skip uv lock
-        original_run = _pin_bump.run
+        original_run = _common.run
 
         def fake_run(*args: str, **kwargs: object) -> subprocess.CompletedProcess[str]:
             if args and args[0] == "uv":
@@ -444,7 +450,7 @@ class TestPerRepoIntegration:
                 )
             return original_run(*args, **kwargs)
 
-        monkeypatch.setattr(_pin_bump, "run", fake_run)
+        monkeypatch.setattr(_common, "run", fake_run)
 
         exit_code = per_repo(pyproject)
         assert exit_code == 0
@@ -551,7 +557,7 @@ class TestResolveLatestShas:
             calls.append(url)
             return sha_a if "a.git" in url else sha_b
 
-        monkeypatch.setattr(_pin_bump, "resolve_default_branch_head", fake_resolve)
+        monkeypatch.setattr(_common, "resolve_default_branch_head", fake_resolve)
 
         dep_map = {
             "https://example.com/a.git": [
@@ -590,7 +596,7 @@ class TestCollectFleetPins:
                 )
             return subprocess.run(args, text=True, check=True, **kwargs)  # type: ignore[call-overload,no-any-return]
 
-        monkeypatch.setattr(_pin_bump, "run", fake_run)
+        monkeypatch.setattr(_common, "run", fake_run)
         dep_map, skipped, _all_repos = _collect_fleet_pins(
             "test-org", {"GH_TOKEN": "fake"}
         )
@@ -612,8 +618,8 @@ class TestCollectFleetPins:
         def fake_gh(*args: str, **kwargs: object) -> str:
             raise subprocess.CalledProcessError(1, ("gh",) + args)
 
-        monkeypatch.setattr(_pin_bump, "run", fake_run)
-        monkeypatch.setattr(_pin_bump, "gh", fake_gh)
+        monkeypatch.setattr(_common, "run", fake_run)
+        monkeypatch.setattr(_common, "gh", fake_gh)
         dep_map, skipped, _all_repos = _collect_fleet_pins(
             "test-org", {"GH_TOKEN": "fake"}
         )
@@ -641,8 +647,8 @@ class TestCollectFleetPins:
         def fake_gh(*args: str, **kwargs: object) -> str:
             return base64.b64encode(toml_content.encode()).decode()
 
-        monkeypatch.setattr(_pin_bump, "run", fake_run)
-        monkeypatch.setattr(_pin_bump, "gh", fake_gh)
+        monkeypatch.setattr(_common, "run", fake_run)
+        monkeypatch.setattr(_common, "gh", fake_gh)
         dep_map, skipped, _all_repos = _collect_fleet_pins(
             "test-org", {"GH_TOKEN": "fake"}
         )
@@ -672,8 +678,8 @@ class TestCollectFleetPins:
         def fake_gh(*args: str, **kwargs: object) -> str:
             return base64.b64encode(toml_content.encode()).decode()
 
-        monkeypatch.setattr(_pin_bump, "run", fake_run)
-        monkeypatch.setattr(_pin_bump, "gh", fake_gh)
+        monkeypatch.setattr(_common, "run", fake_run)
+        monkeypatch.setattr(_common, "gh", fake_gh)
         dep_map, skipped, _all_repos = _collect_fleet_pins(
             "test-org", {"GH_TOKEN": "fake"}
         )
@@ -712,8 +718,8 @@ class TestCollectFleetPins:
             fetch_order.append(repo)
             return base64.b64encode(repo_tomls[repo].encode()).decode()
 
-        monkeypatch.setattr(_pin_bump, "run", fake_run)
-        monkeypatch.setattr(_pin_bump, "gh", fake_gh)
+        monkeypatch.setattr(_common, "run", fake_run)
+        monkeypatch.setattr(_common, "gh", fake_gh)
         dep_map, skipped, _all_repos = _collect_fleet_pins(
             "test-org", {"GH_TOKEN": "fake"}
         )
@@ -971,7 +977,7 @@ class TestApplyPinBump:
                 args=args, returncode=0, stdout="", stderr=""
             )
 
-        monkeypatch.setattr(_pin_bump, "run", fake_run)
+        monkeypatch.setattr(_common, "run", fake_run)
         return subprocess_calls, gh_calls
 
     def test_creates_new_pr(self, tmp_path: Path, monkeypatch) -> None:
@@ -1031,7 +1037,7 @@ class TestApplyPinBump:
                 args=args, returncode=0, stdout="", stderr=""
             )
 
-        monkeypatch.setattr(_pin_bump, "run", fake_run)
+        monkeypatch.setattr(_common, "run", fake_run)
 
         bumps = [("mypkg", "f" * 40)]
         _apply_pin_bump("test-org", "myrepo", bumps, "fake-token", str(tmp_path))
@@ -1079,13 +1085,13 @@ class TestPushWithRetry:
     ) -> None:
         calls: list[tuple[str, ...]] = []
         monkeypatch.setattr(
-            _pin_bump,
+            _common,
             "run",
             _fake_push_run([(1, _GH_500_PUSH_OUTPUT), (0, "")], calls),
         )
         sleeps: list[float] = []
 
-        retries = _pin_bump._push_with_retry(
+        retries = _common._push_with_retry(
             tmp_path, "pin-bump/sweep", sleep=sleeps.append
         )
 
@@ -1101,7 +1107,7 @@ class TestPushWithRetry:
     ) -> None:
         calls: list[tuple[str, ...]] = []
         monkeypatch.setattr(
-            _pin_bump,
+            _common,
             "run",
             _fake_push_run(
                 [(128, "remote: Permission to test-org/myrepo.git denied.\n")],
@@ -1111,7 +1117,7 @@ class TestPushWithRetry:
         sleeps: list[float] = []
 
         with pytest.raises(subprocess.CalledProcessError):
-            _pin_bump._push_with_retry(tmp_path, "pin-bump/sweep", sleep=sleeps.append)
+            _common._push_with_retry(tmp_path, "pin-bump/sweep", sleep=sleeps.append)
 
         assert sleeps == []
         assert len(calls) == 1
@@ -1119,7 +1125,7 @@ class TestPushWithRetry:
     def test_gives_up_after_bounded_retries(self, tmp_path: Path, monkeypatch) -> None:
         calls: list[tuple[str, ...]] = []
         monkeypatch.setattr(
-            _pin_bump,
+            _common,
             "run",
             _fake_push_run(
                 [(1, "fatal: The remote end hung up unexpectedly\n")] * 4, calls
@@ -1128,7 +1134,7 @@ class TestPushWithRetry:
         sleeps: list[float] = []
 
         with pytest.raises(subprocess.CalledProcessError):
-            _pin_bump._push_with_retry(tmp_path, "pin-bump/sweep", sleep=sleeps.append)
+            _common._push_with_retry(tmp_path, "pin-bump/sweep", sleep=sleeps.append)
 
         assert sleeps == [10, 20, 40]
         assert len(calls) == 4
@@ -1143,7 +1149,7 @@ class TestPushWithRetry:
         ],
     )
     def test_transient_patterns(self, output: str) -> None:
-        assert _pin_bump._is_transient_push_error(output)
+        assert _common._is_transient_push_error(output)
 
     @pytest.mark.parametrize(
         "output",
@@ -1154,7 +1160,7 @@ class TestPushWithRetry:
         ],
     )
     def test_non_transient_patterns(self, output: str) -> None:
-        assert not _pin_bump._is_transient_push_error(output)
+        assert not _common._is_transient_push_error(output)
 
     def test_sweep_lists_retried_repo_as_bumped(
         self, tmp_path: Path, monkeypatch, capsys
@@ -1162,7 +1168,7 @@ class TestPushWithRetry:
         """A single transient 5xx on push does not fail the repo; the summary
         lists it as bumped with a 'retried 1×' note."""
         monkeypatch.setattr(
-            _pin_bump,
+            _sweep,
             "_collect_fleet_pins",
             lambda *a, **kw: (
                 {"https://github.com/org/dep.git": [("myrepo", "mypkg", "0" * 40)]},
@@ -1171,7 +1177,7 @@ class TestPushWithRetry:
             ),
         )
         monkeypatch.setattr(
-            _pin_bump,
+            _sweep,
             "_resolve_latest_shas",
             lambda dm: ({"https://github.com/org/dep.git": "f" * 40}, []),
         )
@@ -1197,8 +1203,8 @@ class TestPushWithRetry:
                 args=args, returncode=0, stdout="main\n", stderr=""
             )
 
-        monkeypatch.setattr(_pin_bump, "run", fake_run)
-        monkeypatch.setattr(_pin_bump.time, "sleep", lambda s: None)
+        monkeypatch.setattr(_common, "run", fake_run)
+        monkeypatch.setattr(_common.time, "sleep", lambda s: None)
         monkeypatch.setenv("SWEEP_TOKEN", "fake-token")
         monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
 
@@ -1238,8 +1244,8 @@ class TestSweep:
             """).lstrip()
             return base64.b64encode(toml.encode()).decode()
 
-        monkeypatch.setattr(_pin_bump, "run", fake_run)
-        monkeypatch.setattr(_pin_bump, "gh", fake_gh)
+        monkeypatch.setattr(_common, "run", fake_run)
+        monkeypatch.setattr(_common, "gh", fake_gh)
         monkeypatch.setenv("SWEEP_TOKEN", "fake-token")
 
         exit_code = sweep("test-org", "SWEEP_TOKEN")
@@ -1273,8 +1279,8 @@ class TestSweep:
         def fake_gh(*args: str, **kwargs: object) -> str:
             return base64.b64encode(toml_content.encode()).decode()
 
-        monkeypatch.setattr(_pin_bump, "run", fake_run)
-        monkeypatch.setattr(_pin_bump, "gh", fake_gh)
+        monkeypatch.setattr(_common, "run", fake_run)
+        monkeypatch.setattr(_common, "gh", fake_gh)
         monkeypatch.setenv("SWEEP_TOKEN", "fake-token")
 
         exit_code = sweep("test-org", "SWEEP_TOKEN")
@@ -1323,8 +1329,8 @@ class TestSweep:
         def fake_gh(*args: str, **kwargs: object) -> str:
             return base64.b64encode(toml_content.encode()).decode()
 
-        monkeypatch.setattr(_pin_bump, "run", fake_run)
-        monkeypatch.setattr(_pin_bump, "gh", fake_gh)
+        monkeypatch.setattr(_common, "run", fake_run)
+        monkeypatch.setattr(_common, "gh", fake_gh)
         monkeypatch.setenv("SWEEP_TOKEN", "fake-token")
 
         exit_code = sweep("test-org", "SWEEP_TOKEN")
@@ -1361,12 +1367,12 @@ class TestSweep:
         all_fleet_repos = ["board", "mail"]
 
         monkeypatch.setattr(
-            _pin_bump,
+            _sweep,
             "_collect_fleet_pins",
             lambda *a, **kw: (dep_map, [], all_fleet_repos),
         )
         monkeypatch.setattr(
-            _pin_bump,
+            _sweep,
             "_resolve_latest_shas",
             lambda dm: ({f"file://{dep_bare}": head}, []),
         )
@@ -1385,7 +1391,7 @@ class TestSweep:
             bumps_per_repo[repo] = bumps
             return f"{repo}_pr_sha"
 
-        monkeypatch.setattr(_pin_bump, "_apply_pin_bump", fake_apply)
+        monkeypatch.setattr(_sweep, "_apply_pin_bump", fake_apply)
         monkeypatch.setenv("SWEEP_TOKEN", "fake-token")
 
         exit_code = sweep("test-org", "SWEEP_TOKEN")
@@ -1411,12 +1417,12 @@ class TestSweep:
         all_fleet_repos = ["a", "b"]
 
         monkeypatch.setattr(
-            _pin_bump,
+            _sweep,
             "_collect_fleet_pins",
             lambda *a, **kw: (dep_map, [], all_fleet_repos),
         )
         monkeypatch.setattr(
-            _pin_bump,
+            _sweep,
             "_resolve_latest_shas",
             lambda dm: (
                 {
@@ -1439,7 +1445,7 @@ class TestSweep:
             apply_calls.append(repo)
             return "sha"
 
-        monkeypatch.setattr(_pin_bump, "_apply_pin_bump", fake_apply)
+        monkeypatch.setattr(_sweep, "_apply_pin_bump", fake_apply)
         monkeypatch.setenv("SWEEP_TOKEN", "fake-token")
 
         exit_code = sweep("test-org", "SWEEP_TOKEN")
@@ -1465,12 +1471,12 @@ class TestSweep:
         all_fleet_repos = ["leaf", "consumer"]
 
         monkeypatch.setattr(
-            _pin_bump,
+            _sweep,
             "_collect_fleet_pins",
             lambda *a, **kw: (dep_map, [], all_fleet_repos),
         )
         monkeypatch.setattr(
-            _pin_bump,
+            _sweep,
             "_resolve_latest_shas",
             lambda dm: (
                 {
@@ -1495,7 +1501,7 @@ class TestSweep:
                 raise RuntimeError("lock failed")
             return "sha"
 
-        monkeypatch.setattr(_pin_bump, "_apply_pin_bump", fake_apply)
+        monkeypatch.setattr(_sweep, "_apply_pin_bump", fake_apply)
         monkeypatch.setenv("SWEEP_TOKEN", "fake-token")
 
         exit_code = sweep("test-org", "SWEEP_TOKEN")
@@ -1640,8 +1646,8 @@ class TestDirectUrlGitPins:
         def fake_gh(*args: str, **kwargs: object) -> str:
             return base64.b64encode(toml_content.encode()).decode()
 
-        monkeypatch.setattr(_pin_bump, "run", fake_run)
-        monkeypatch.setattr(_pin_bump, "gh", fake_gh)
+        monkeypatch.setattr(_common, "run", fake_run)
+        monkeypatch.setattr(_common, "gh", fake_gh)
         dep_map, skipped, _all = _collect_fleet_pins("test-org", {"GH_TOKEN": "x"})
         assert dep_map == {
             "https://github.com/org/modules.git": [("board", "robotsix-modules", sha)]
@@ -1677,8 +1683,8 @@ class TestDirectUrlGitPins:
             return base64.b64encode(toml_content.encode()).decode()
 
         summary = tmp_path / "summary.md"
-        monkeypatch.setattr(_pin_bump, "run", fake_run)
-        monkeypatch.setattr(_pin_bump, "gh", fake_gh)
+        monkeypatch.setattr(_common, "run", fake_run)
+        monkeypatch.setattr(_common, "gh", fake_gh)
         monkeypatch.setenv("SWEEP_TOKEN", "fake-token")
         monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
 
