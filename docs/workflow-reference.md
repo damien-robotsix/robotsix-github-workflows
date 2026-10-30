@@ -317,6 +317,7 @@ states the accepted alternatives in its response header:
 | `pytest-args` | string | `-m "not docker"` | Extra pytest arguments. |
 | `pytest-numprocesses` | string | `auto` | pytest-xdist workers. |
 | `runs-on` | string | `ubuntu-latest` | Runner label. |
+| `test-timeout-minutes` | number | `15` | `timeout-minutes` for the `tests` and `test` jobs. Raise only for slow suites. The `lint`, `typecheck`, `vulture` and `audit-sarif` jobs have fixed ceilings (5, 10, 5 and 10 minutes). |
 | `run-deptry` | boolean | `true` | Run deptry. |
 | `run-audit` | boolean | `true` | Run uv audit. |
 | `run-bandit` | boolean | `true` | Run bandit. |
@@ -329,6 +330,11 @@ states the accepted alternatives in its response header:
 | `run-vulture` | boolean | `false` | Add a separate `vulture` job running `uv run vulture` (vulture `2.16`, provisioned via `--with`) as a dead-code gate. The job declares its own `contents: read` permissions — callers need grant nothing extra. |
 | `vulture-args` | string | `""` | Arguments passed verbatim to vulture (shell quoting honoured), e.g. `src/ vulture_whitelist.py --min-confidence 80 --ignore-decorators "@field_validator,@model_validator"`. Empty → vulture reads `[tool.vulture]` from `pyproject.toml`. |
 | `job_split` | boolean | `false` | Split into parallel lint/type/test jobs. |
+
+Every job in `python-ci.yml` declares `timeout-minutes`, because callers cannot set
+it on a `uses:` job. Ceilings are 15 minutes for `tests` and `test`
+(`test-timeout-minutes`), 5 for `lint` and `vulture`, 10 for `typecheck` and
+`audit-sarif`.
 
 No secrets.
 
