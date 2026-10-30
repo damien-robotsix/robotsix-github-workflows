@@ -26,7 +26,7 @@ The Python test suite covers:
 
 | Test file | What it covers |
 |---|---|
-| `tests/test-pin-bump.py` | `scripts/pin-bump.py` |
+| `tests/test-pin-bump.py` | `scripts/pin-bump.py`, `scripts/pin_bump_common.py`, `scripts/pin_bump_sweep.py` |
 | `tests/test-lint-sarif-permissions.py` | `scripts/lint_sarif_permissions.py` |
 | `tests/test-check-local-action-refs.py` | `scripts/check_local_action_refs.py` |
 | `tests/test-config-ownership-check.py` | `scripts/config_ownership_check.py` |
