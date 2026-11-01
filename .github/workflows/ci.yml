@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+    # `edited` re-runs CI when a PR title is fixed, so the
+    # pr-title job below can go green without a new push.
+    types: [opened, edited, synchronize, reopened]
 
 permissions:
   contents: read
@@ -13,6 +16,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  pr-title:
+    # PRs are squash-merged, so the PR title becomes the commit subject
+    # release-please parses for version bumps and CHANGELOG sections.
+    name: Validate PR title
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read  # read the PR title to validate it
+    steps:
+      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50  # v6.1.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # `deps` is the Dependabot commit-message prefix (.github/dependabot.yml).
+          types: |
+            feat
+            fix
+            perf
+            revert
+            docs
+            refactor
+            test
+            build
+            ci
+            chore
+            deps
+
   lint-workflows:
     name: Lint workflows
     uses: ./.github/workflows/lint-workflows.yml  # zizmor: ignore[self-repository]
