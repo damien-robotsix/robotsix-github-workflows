@@ -80,6 +80,7 @@ jobs:
   release:
     name: Release
     runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 15
     permissions:
       contents: write       # push release commit and tag (+ release branch in PR fallback)
       pull-requests: write  # gh pr create + gh pr merge in protected-branch fallback
