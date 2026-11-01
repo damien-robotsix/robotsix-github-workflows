@@ -129,6 +129,7 @@ jobs:
   scan:
     name: Scan
     runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 15
     env:
       # Trivy DB mirrors, read by every Trivy step (gate and SARIF). Empty
       # values are ignored by Trivy, which then uses its built-in default.

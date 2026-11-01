@@ -135,6 +135,9 @@ jobs:
   publish:
     name: Publish
     runs-on: ${{ inputs.runs-on }}
+    # 20 min (above the 15-min fleet default): large base-layer pulls,
+    # multi-arch build and the Trivy scan routinely exceed 15 minutes.
+    timeout-minutes: 20
     env:
       # Resolved once so the metadata, by-digest push and hardening base ref
       # all agree. Cannot be a workflow_call input default (Rule 5: dynamic

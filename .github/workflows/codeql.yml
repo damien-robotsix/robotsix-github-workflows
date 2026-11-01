@@ -36,6 +36,7 @@ jobs:
   analyze:
     name: Analyze
     runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 15
     permissions:
       contents: read
       security-events: write  # CodeQL SARIF upload
