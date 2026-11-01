@@ -27,6 +27,7 @@ the examples below follow this form.
 |---|---|
 | `python-ci.yml` | lint/format/type/test gate for Python packages |
 | `python-security.yml` | bandit / pip-audit / trufflehog security scan |
+| `secret-scan.yml` | language-agnostic TruffleHog secret scan (no uv / `uv.lock` required) |
 | `python-docs.yml` | mkdocs build/deploy |
 | `auto-release.yml` | scheduled towncrier-driven `0.x` tag-cutting release workflow (deprecated — use `release-please.yml`) |
 | `release-please.yml` | conventional-commits release automation (replaces deprecated `auto-release.yml`) |
@@ -820,6 +821,41 @@ The workflow requires only `contents: read` (declared in the reusable workflow).
 It runs a single `security` job that executes TruffleHog secret scanning,
 pip-audit dependency vulnerability auditing, and uploads a CycloneDX SBOM as
 the `sbom` artifact.
+
+## `secret-scan.yml` — caller template
+
+Repos that are not uv-locked Python projects (npm/TypeScript, Dart, static
+sites, ROS 2, …) meet the fleet secret-scanning control with this
+TruffleHog-only workflow — it needs no `setup-uv`, `uv sync` or `uv.lock`.
+Its TruffleHog steps (pins and flags) are identical to `python-security.yml`'s,
+so uv Python repos should keep using `python-security.yml` instead.
+
+```yaml
+name: Secret Scan
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/secret-scan.yml@<sha-of-vX.Y.Z> # vX.Y.Z
+    # All inputs are optional — defaults shown:
+    # with:
+    #   runs-on: "ubuntu-latest"
+    #   trufflehog-pr-diff: false
+    #   trufflehog-extra-args: ""
+```
+
+The workflow requires only `contents: read` (declared in the reusable
+workflow). It runs a single `secret-scan` job that checks out full history
+(`fetch-depth: 0`, `persist-credentials: false`) and runs TruffleHog over the
+PR diff (`trufflehog-pr-diff: true` on `pull_request` events) or the full
+checkout (default).
 
 ## Branch Protection
 
