@@ -46,6 +46,11 @@ on:
         required: false
         type: string
         default: "ubuntu-latest"
+      test-timeout-minutes:
+        description: Job timeout-minutes for the tests/test jobs (fleet default 15). Raise only for slow suites.
+        required: false
+        type: number
+        default: 15
       run-deptry:
         description: Whether to run the deptry dependency-hygiene step.
         required: false
@@ -160,6 +165,7 @@ jobs:
     if: ${{ !inputs.job_split }}
     name: Tests
     runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.test-timeout-minutes }}
     permissions:
       # contents:read is REQUIRED for actions/checkout to clone PRIVATE
       # caller repos. Declaring any permissions block resets all unlisted
@@ -410,6 +416,7 @@ jobs:
     if: ${{ inputs.run-audit && inputs.audit-sarif }}
     name: Dependency audit (SARIF)
     runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 10
     steps:
       - uses: damien-robotsix/robotsix-github-workflows/.github/actions/python-setup@3e3e01a6eec8588bfcc756954640fa91e3801ff1
         with:
@@ -460,6 +467,7 @@ jobs:
     if: ${{ inputs.job_split }}
     name: Lint
     runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 5
     permissions:
       contents: read
     steps:
@@ -517,6 +525,7 @@ jobs:
     if: ${{ inputs.job_split }}
     name: Type Check
     runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -555,6 +564,7 @@ jobs:
     if: ${{ inputs.job_split }}
     name: Test
     runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.test-timeout-minutes }}
     permissions:
       contents: read
     steps:
@@ -633,6 +643,7 @@ jobs:
     if: ${{ inputs.run-vulture }}
     name: Vulture (dead code)
     runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 5
     permissions:
       # Least privilege: vulture only reads the checked-out tree.
       # contents:read is still required for actions/checkout (inside
