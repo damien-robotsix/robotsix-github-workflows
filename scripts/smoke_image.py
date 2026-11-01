@@ -45,8 +45,9 @@ import json
 import shlex
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 # Docker exit codes that mean the container process could not be *executed*
 # at all (as opposed to running and returning a non-zero status).  These are
