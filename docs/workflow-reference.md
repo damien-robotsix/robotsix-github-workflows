@@ -335,6 +335,7 @@ states the accepted alternatives in its response header:
 | `pytest-args` | string | `-m "not docker"` | Extra pytest arguments. |
 | `pytest-numprocesses` | string | `auto` | pytest-xdist workers. |
 | `runs-on` | string | `ubuntu-latest` | Runner label. |
+| `test-timeout-minutes` | number | `15` | `timeout-minutes` for the `tests` and `test` jobs. Raise only for slow suites. The `lint`, `typecheck`, `vulture` and `audit-sarif` jobs have fixed ceilings (5, 10, 5 and 10 minutes). |
 | `run-deptry` | boolean | `true` | Run deptry. |
 | `run-audit` | boolean | `true` | Run uv audit. |
 | `run-bandit` | boolean | `true` | Run bandit. |
@@ -349,6 +350,11 @@ states the accepted alternatives in its response header:
 | `job_split` | boolean | `false` | Split into parallel lint/type/test jobs. |
 | `pre-test-command` | string | `""` | Shell snippet run (bash `eval`, `UV_PROJECT_ENVIRONMENT=system`) after `uv sync --frozen` and before lint/type/test in the job that runs pytest (`tests`, or `test` when `job_split`), e.g. `uv run playwright install --with-deps chromium`. Empty → step skipped. |
 | `extra-check-command` | string | `""` | Repo-specific check (bash `eval`) run after Ruff in `tests` (or `lint` when `job_split`), e.g. a config-schema drift check; non-zero exit fails the job. Empty → step skipped. |
+
+Every job in `python-ci.yml` declares `timeout-minutes`, because callers cannot set
+it on a `uses:` job. Ceilings are 15 minutes for `tests` and `test`
+(`test-timeout-minutes`), 5 for `lint` and `vulture`, 10 for `typecheck` and
+`audit-sarif`.
 
 No secrets.
 
