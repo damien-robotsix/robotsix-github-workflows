@@ -1145,6 +1145,57 @@ It runs a single `security` job that executes TruffleHog secret scanning,
 pip-audit dependency vulnerability auditing, and uploads a CycloneDX SBOM as
 the `sbom` artifact.
 
+## `secret-scan.yml`
+
+| Input | Type | Default | Description |
+|---|---|---|---|
+| `runs-on` | string | `ubuntu-latest` | Runner label. |
+| `trufflehog-pr-diff` | boolean | `false` | Limit TruffleHog to PR diff. |
+| `trufflehog-extra-args` | string | `""` | Extra TruffleHog args. |
+
+No secrets.  Requires only `contents: read`.
+
+Language-agnostic TruffleHog secret scan for repos that are not uv-locked
+Python projects: no `setup-uv`, `uv sync` or `uv.lock` requirement.  The
+TruffleHog steps (SHA pins, conditions, flags) are kept identical to
+`python-security.yml`'s; `tests/test-secret-scan-workflow.py` fails if the
+two drift.
+
+### Caller template
+
+Repos that are not uv-locked Python projects (npm/TypeScript, Dart, static
+sites, ROS 2, …) meet the fleet secret-scanning control with this
+TruffleHog-only workflow — it needs no `setup-uv`, `uv sync` or `uv.lock`.
+Its TruffleHog steps (pins and flags) are identical to `python-security.yml`'s,
+so uv Python repos should keep using `python-security.yml` instead.
+
+```yaml
+name: Secret Scan
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/secret-scan.yml@<sha-of-vX.Y.Z> # vX.Y.Z
+    # All inputs are optional — defaults shown:
+    # with:
+    #   runs-on: "ubuntu-latest"
+    #   trufflehog-pr-diff: false
+    #   trufflehog-extra-args: ""
+```
+
+The workflow requires only `contents: read` (declared in the reusable
+workflow). It runs a single `secret-scan` job that checks out full history
+(`fetch-depth: 0`, `persist-credentials: false`) and runs TruffleHog over the
+PR diff (`trufflehog-pr-diff: true` on `pull_request` events) or the full
+checkout (default).
+
 ## `scorecard.yml`
 
 No inputs.  No secrets (caller needs `security-events: write` and
