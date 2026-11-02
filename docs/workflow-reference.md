@@ -452,6 +452,22 @@ Consumers can reuse the same file locally via `.pre-commit-hooks.yaml`:
     - id: uv-audit             # uv audit --frozen --preview + .audit-ignore ids
 ```
 
+## `secret-scan.yml`
+
+| Input | Type | Default | Description |
+|---|---|---|---|
+| `runs-on` | string | `ubuntu-latest` | Runner label. |
+| `trufflehog-pr-diff` | boolean | `false` | Limit TruffleHog to PR diff. |
+| `trufflehog-extra-args` | string | `""` | Extra TruffleHog args. |
+
+No secrets.  Requires only `contents: read`.
+
+Language-agnostic TruffleHog secret scan for repos that are not uv-locked
+Python projects: no `setup-uv`, `uv sync` or `uv.lock` requirement.  The
+TruffleHog steps (SHA pins, conditions, flags) are kept identical to
+`python-security.yml`'s; `tests/test-secret-scan-workflow.py` fails if the
+two drift.
+
 ## `scorecard.yml`
 
 No inputs.  No secrets (caller needs `security-events: write` and
