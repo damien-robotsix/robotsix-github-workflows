@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Integration tests for the baseline-check workflow's critical checks.
 #
-# Tests the AGENT.md and LICENSE validation logic used in
-# .github/workflows/baseline-check.yml.
+# Tests the AGENT.md, LICENSE and .secrets-patterns-excluded validation
+# logic used in .github/workflows/baseline-check.yml.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -85,6 +85,69 @@ if ! head -n 20 LICENSE | grep -qE 'MIT License|Permission is hereby granted'; t
     exit 1
 fi
 echo "PASS: MIT LICENSE correctly detected"
+
+# ------------------------------------------------------------------
+# Test 3: .secrets-patterns-excluded (scripts/check_secrets_patterns_excluded.py)
+# ------------------------------------------------------------------
+echo ""
+echo "=== Test 3: .secrets-patterns-excluded ==="
+
+CHECK="$REPO_ROOT/scripts/check_secrets_patterns_excluded.py"
+WARN_DAY=2026-11-01
+BLOCK_DAY=2027-01-31
+
+# run_check <root> <today>: sets RC and OUT.
+run_check() {
+    set +e
+    OUT=$(python3 "$CHECK" --root "$1" --today "$2" 2>&1)
+    RC=$?
+    set -e
+}
+
+SPE="$TMPDIR/spe"
+mkdir -p "$SPE"
+
+echo "--- 3a: present and valid → passes ---"
+printf '# comment\n\n^vendor/\n.*\\.lock$\n' > "$SPE/.secrets-patterns-excluded"
+run_check "$SPE" "$BLOCK_DAY"
+if [ "$RC" -ne 0 ] || ! grep -q 'OK' <<<"$OUT"; then
+    echo "FAIL: valid file should pass (rc=$RC): $OUT" >&2
+    exit 1
+fi
+echo "PASS: valid .secrets-patterns-excluded accepted"
+
+echo "--- 3b: missing → warning before blocking date, error after ---"
+rm "$SPE/.secrets-patterns-excluded"
+run_check "$SPE" "$WARN_DAY"
+if [ "$RC" -ne 0 ] || ! grep -q '::warning::.secrets-patterns-excluded is missing' <<<"$OUT"; then
+    echo "FAIL: missing file should warn with exit 0 (rc=$RC): $OUT" >&2
+    exit 1
+fi
+run_check "$SPE" "$BLOCK_DAY"
+if [ "$RC" -ne 1 ] || ! grep -q '::error::.secrets-patterns-excluded is missing' <<<"$OUT"; then
+    echo "FAIL: missing file should error with exit 1 (rc=$RC): $OUT" >&2
+    exit 1
+fi
+echo "PASS: missing .secrets-patterns-excluded detected"
+
+echo "--- 3c: gitignore glob (invalid regex) → rejected ---"
+printf '*secret*\n' > "$SPE/.secrets-patterns-excluded"
+run_check "$SPE" "$BLOCK_DAY"
+if [ "$RC" -ne 1 ] || ! grep -q 'line `\*secret\*` is not a valid regular expression' <<<"$OUT"; then
+    echo "FAIL: glob line should be rejected (rc=$RC): $OUT" >&2
+    exit 1
+fi
+echo "PASS: invalid regex detected"
+
+echo "--- 3d: no-op detect-secrets wiring → rejected ---"
+printf '^vendor/\n' > "$SPE/.secrets-patterns-excluded"
+printf "      - id: detect-secrets\n        args:\n          - '--exclude-files'\n          - '.secrets-patterns-excluded'\n" > "$SPE/.pre-commit-config.yaml"
+run_check "$SPE" "$BLOCK_DAY"
+if [ "$RC" -ne 1 ] || ! grep -q 'silent no-op' <<<"$OUT"; then
+    echo "FAIL: no-op --exclude-files wiring should be rejected (rc=$RC): $OUT" >&2
+    exit 1
+fi
+echo "PASS: no-op detect-secrets wiring detected"
 
 echo ""
 echo "=== All tests passed ==="
