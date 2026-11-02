@@ -442,3 +442,15 @@ jobs:
           image-ref: ${{ steps.scan-ref.outputs.image }}
           ignore-unfixed: true
           trivyignores: ${{ hashFiles(inputs.trivyignores) != '' && inputs.trivyignores || '' }}
+
+      # Drop the ghcr credential written by the login step above. On
+      # GitHub-hosted runners the VM is discarded, but the self-hosted
+      # bequiet runners keep their container filesystem across jobs
+      # (`restart: always` re-uses the container), so ~/.docker/config.json
+      # kept this job's GITHUB_TOKEN after it expired and every later
+      # ghcr pull on that runner (container actions such as
+      # reviewdog/action-actionlint) failed `error from registry: denied`
+      # (robotsix-invest Lint Workflows, 2026-11-01/02).
+      - name: Log out of GitHub Container Registry
+        if: ${{ always() }}
+        run: docker logout ghcr.io || true
