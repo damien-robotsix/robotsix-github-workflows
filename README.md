@@ -36,7 +36,7 @@ the examples below follow this form.
 | `deps-bump.yml` | scheduled `uv lock --upgrade` PR |
 | `bump.yml` | shared bump engine behind the `deps-bump.yml` / `pin-bump.yml` wrappers (`bump-mode: deps|pins`) |
 | `dependabot-auto-merge.yml` | auto-merge Dependabot PRs (protected & unprotected branch handling) |
-| `baseline-check.yml` | enforce AGENT.md and .github/dependabot.yml baseline rules |
+| `baseline-check.yml` | enforce repo baseline rules: AGENT.md, README.md and LICENSE (MIT), `.github/dependabot.yml` ecosystems, `release-please-config.json`, `.secrets-patterns-excluded` (warning-first until 2027-01-31), plus the opt-in modules-drift gate |
 | `codeql.yml` | CodeQL static analysis |
 | `scorecard.yml` | OpenSSF Scorecard supply-chain posture analysis (SARIF to Code Scanning) |
 | `dependency-review.yml` | PR gate: dependency-review-action vulnerability-severity + license policy check |
@@ -455,6 +455,7 @@ jobs:
 - `LICENSE` at the repo root using the MIT license.
 - `.github/dependabot.yml` covering at minimum `uv`, `github-actions`, and `pre-commit` ecosystems (plus `docker` when `has-docker: true` or a root `Dockerfile` exists, plus `npm` when `package.json` exists).
 - `release-please-config.json` at the repo root.
+- `.secrets-patterns-excluded` at the repo root: one regular expression per line (not gitignore globs; blank lines and `#` comments allowed), and no detect-secrets `--exclude-files .secrets-patterns-excluded` wiring in `.pre-commit-config.yaml` (see robotsix-standards `docs/secret-files-are-never-tracked.md`). Warning-first: reported as `::warning::` until 2027-01-31, failing from then.
 
 ## `config-ownership-check.yml` — caller template
 

@@ -177,6 +177,25 @@ jobs:
           fi
           echo "release-please-config.json found — changelog is generated from conventional commits."
 
+      # The checker lives in THIS workflows repo, not the caller's
+      # checkout — a bare `scripts/...` path resolves against the CALLER
+      # repo, so fetch this repo at the exact sha the caller pinned.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          repository: damien-robotsix/robotsix-github-workflows
+          ref: ${{ github.job_workflow_sha }}
+          path: _workflow-lib
+          persist-credentials: false
+
+      # robotsix-standards docs/secret-files-are-never-tracked.md mandates a
+      # root .secrets-patterns-excluded (one regex per line) in every repo.
+      # Checks presence, regex validity and the no-op detect-secrets
+      # `--exclude-files .secrets-patterns-excluded` wiring.  Warning-first
+      # (::warning::, exit 0) until 2027-01-31, blocking from then — the
+      # same flip date as the standards gate.  Stdlib-only script.
+      - name: Check .secrets-patterns-excluded
+        run: python3 _workflow-lib/scripts/check_secrets_patterns_excluded.py --root .
+
   # Modules-drift gate: validates docs/modules.yaml registration and path
   # consistency.  Only runs when the caller opts in with has-board: true,
   # since it requires Python, uv, and robotsix-modules to be available.
