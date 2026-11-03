@@ -21,3 +21,7 @@ jobs:
     with:
       run-actionlint: true
       run-zizmor: true
+
+  semgrep:
+    name: Semgrep
+    uses: ./.github/workflows/semgrep.yml  # zizmor: ignore[self-repository]
