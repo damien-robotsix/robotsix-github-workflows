@@ -38,6 +38,7 @@ the examples below follow this form.
 | `dependabot-auto-merge.yml` | auto-merge Dependabot PRs (protected & unprotected branch handling) |
 | `baseline-check.yml` | enforce repo baseline rules: AGENT.md, README.md and LICENSE (MIT), `.github/dependabot.yml` ecosystems, `release-please-config.json`, `.secrets-patterns-excluded` (warning-first until 2027-01-31), plus the opt-in modules-drift gate |
 | `codeql.yml` | CodeQL static analysis |
+| `semgrep.yml` | fleet SAST gate: Semgrep scan failing on `ERROR` findings, SARIF uploaded as a workflow artifact (`contents: read` only), plus a rule-id check on suppression comments |
 | `scorecard.yml` | OpenSSF Scorecard supply-chain posture analysis (SARIF to Code Scanning) |
 | `dependency-review.yml` | PR gate: dependency-review-action vulnerability-severity + license policy check |
 | `config-ownership-check.yml` | PR gate: prevents deploy-plane config from leaking component-internal settings |
@@ -52,7 +53,7 @@ Mill-domain checks (e.g. `check_kind_literals`) live in robotsix-mill's own CI, 
 ## Documentation
 
 - [Workflow Reference](docs/workflow-reference.md) — consolidated input, default, and secret reference
-  for all 18 reusable workflows.
+  for all reusable workflows.
 - [Branch Protection](docs/branch-protection.md) — ruleset semantics, usage, and required `gh` auth scopes.
 - [Workflow Authoring](docs/WORKFLOW-AUTHORING.md) — conventions for authoring new reusable workflows:
   structure, input design and validation, error reporting, and the pre-commit checklist.
@@ -545,6 +546,47 @@ jobs:
     - tests
     - '**/*.test.py'
   ```
+
+## `semgrep.yml` — caller template
+
+Semgrep is the fleet SAST standard (robotsix-standards
+`docs/security-posture.md`).  Consumer repos add a wrapper workflow (e.g.
+`.github/workflows/semgrep.yml`) that runs on every PR and every push to
+`main`, and mark its `Semgrep / Semgrep` check as a required status check:
+
+```yaml
+name: Semgrep
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  semgrep:
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/semgrep.yml@<sha-of-vX.Y.Z> # vX.Y.Z
+    # All inputs are optional — defaults shown:
+    # with:
+    #   config: "p/default"          # add language packs, e.g. "p/default p/python"
+    #   severity: "ERROR"
+    #   paths: "."
+    #   exclude: ""                  # e.g. "tests/fixtures"
+    #   diff-scan: false             # true = PR findings relative to the base commit only
+    #   semgrep-version: "1.91.0"
+    #   check-nosemgrep-ids: true
+    #   runs-on: "ubuntu-latest"
+```
+
+The workflow needs only `contents: read`: findings are uploaded as the
+`semgrep-sarif` artifact, not to the GitHub Security tab.  A repo-local
+`.semgrep.yml` (or `.semgrep/` directory) is added to the configured rulesets
+automatically.
+
+**Suppressions must name a rule id.**  Write `nosemgrep: <rule-id>` after a
+comment marker on the offending line (e.g. a Python `#` comment followed by
+`nosemgrep: python.lang.security.audit.eval-detected.eval-detected`).  A bare
+marker without a rule id silences every rule on the line and fails the
+`check-nosemgrep-ids` step.
 
 ## `dependency-review.yml` — caller template
 

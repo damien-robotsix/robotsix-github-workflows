@@ -469,6 +469,26 @@ calling workflow file and rejects reusable-workflow callers.  Repos that want
 the public badge add a standalone workflow — see
 `.github/workflows/self-scorecard.yml` in this repo for the reference shape.
 
+## `semgrep.yml`
+
+| Input | Type | Default | Description |
+|---|---|---|---|
+| `config` | string | `p/default` | Space-separated rulesets expanded into repeated `--config` flags (registry packs such as `p/default`, `p/python`, or repo-relative rule files). A repo-local `.semgrep.yml` / `.semgrep.yaml` / `.semgrep/` is always added on top when present. |
+| `severity` | string | `ERROR` | Space-separated severities expanded into repeated `--severity` flags; the job fails (`--error`) on any finding at these levels. |
+| `paths` | string | `.` | Space-separated repo-relative scan targets. |
+| `exclude` | string | `""` | Space-separated path globs expanded into repeated `--exclude` flags. |
+| `diff-scan` | boolean | `false` | On `pull_request` events, report only findings introduced relative to the PR base (`--baseline-commit`). Other events always run a full scan. |
+| `semgrep-version` | string | `1.91.0` | Exact `semgrep` PyPI version installed with pip. |
+| `check-nosemgrep-ids` | boolean | `true` | Fail when a suppression comment does not name a rule id (`scripts/check_nosemgrep_rule_ids.py`). |
+| `runs-on` | string | `ubuntu-latest` | Runner label. |
+
+No secrets (caller needs only `contents: read`).
+
+Runs `semgrep scan --error --severity <severity>` and uploads the SARIF
+results as the `semgrep-sarif` workflow artifact — not to Code Scanning, so
+no `security-events: write` permission is needed.  Metrics are disabled
+(`--metrics off`).
+
 ## `scan-container.yml`
 
 | Input | Type | Default | Description |
