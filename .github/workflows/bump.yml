@@ -164,7 +164,7 @@ jobs:
           # shellcheck disable=SC2086
           python3 _workflow-lib/scripts/pin-bump.py per-repo $PKG_ARGS
 
-      - uses: damien-robotsix/robotsix-github-workflows/.github/actions/bump-commit-pr@188518bece972d7d5f1c4e2a0f2226d2526dc0fa
+      - uses: damien-robotsix/robotsix-github-workflows/.github/actions/bump-commit-pr@9c8ed27d9e13091e03c9e544ae30b85630cd5eed
         with:
           token: ${{ steps.bump-setup.outputs.token }}
           bump-branch: ${{ inputs.bump-branch }}
