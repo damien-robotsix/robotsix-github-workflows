@@ -21,7 +21,7 @@ repos:
         # whole package is checked with the same config CI uses.
         pass_filenames: false
         files: ^(scripts/.*\.py|pyproject\.toml)$
-        additional_dependencies: ["types-PyYAML==6.0.12.20260906"]
+        additional_dependencies: ["types-PyYAML==6.0.12.20261103"]
   - repo: local
     hooks:
       - id: check-workflow-rules
