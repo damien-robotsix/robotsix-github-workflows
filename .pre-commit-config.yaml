@@ -9,7 +9,7 @@ repos:
     rev: v0.11.0.1
     hooks: [{ id: shellcheck }]
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.17.3
+    rev: v0.17.4
     hooks:
       - id: ruff-check
         files: ^scripts/.*\.py$
