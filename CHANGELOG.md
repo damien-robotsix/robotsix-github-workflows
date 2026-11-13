@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.6.0](https://github.com/damien-robotsix/robotsix-github-workflows/compare/v1.5.0...v1.6.0) (2026-11-13)
+
+
+### Features
+
+* Add a pre-test setup-command input to the reusable python-ci.yml (so repos with extra pre-test setup, e.g. Playwright, can adopt it) (20261029T144356Z-add-a-pre-test-setup-command-input-to-th-888b) ([#269](https://github.com/damien-robotsix/robotsix-github-workflows/issues/269)) ([375163f](https://github.com/damien-robotsix/robotsix-github-workflows/commit/375163f4fb69d290f6925c45d34c85a5ed1bba29))
+
+
+### Bug Fixes
+
+* **docker-release:** log out of ghcr at job end ([#280](https://github.com/damien-robotsix/robotsix-github-workflows/issues/280)) ([9c8ed27](https://github.com/damien-robotsix/robotsix-github-workflows/commit/9c8ed27d9e13091e03c9e544ae30b85630cd5eed))
+
 ## [1.5.0](https://github.com/damien-robotsix/robotsix-github-workflows/compare/v1.4.0...v1.5.0) (2026-10-29)
 
 
