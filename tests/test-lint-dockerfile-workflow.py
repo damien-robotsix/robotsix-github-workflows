@@ -72,3 +72,40 @@ def test_sarif_job_uploads_one_sarif_with_hadolint_category() -> None:
     assert up["uses"] == f"github/codeql-action/upload-sarif@{UPLOAD_SARIF_SHA}"
     assert up["with"] == {"sarif_file": "hadolint.sarif", "category": "hadolint"}
     assert "success() || failure()" in up["if"]
+
+
+def test_resolve_job_exposes_found_and_files_outputs() -> None:
+    job = _load()["jobs"]["resolve"]
+    assert job["permissions"] == {"contents": "read"}
+    assert job["outputs"] == {
+        "found": "${{ steps.resolve.outputs.found }}",
+        "files": "${{ steps.resolve.outputs.files }}",
+    }
+    resolvers = [s for s in job["steps"] if s.get("id") == "resolve"]
+    assert len(resolvers) == 1
+    assert resolvers[0]["env"] == {"DOCKERFILES": "${{ inputs.dockerfiles }}"}
+
+
+def test_resolve_logic_exists_only_in_resolve_job() -> None:
+    jobs = _load()["jobs"]
+    for name, job in jobs.items():
+        if name == "resolve":
+            continue
+        assert not [s for s in job["steps"] if s.get("id") == "resolve"], name
+
+
+def test_both_hadolint_jobs_use_shared_resolver() -> None:
+    jobs = _load()["jobs"]
+    for name in ("hadolint", "hadolint-sarif"):
+        job = jobs[name]
+        # The SARIF job must not depend on the gate job: it still has to
+        # run (and upload) when the gate fails.
+        assert job["needs"] == "resolve", name
+        runs = [
+            s
+            for s in job["steps"]
+            if s.get("uses", "").startswith("hadolint/hadolint-action@")
+        ]
+        assert len(runs) == 1, name
+        assert runs[0]["if"] == "${{ needs.resolve.outputs.found == 'true' }}"
+        assert runs[0]["with"]["dockerfile"] == "${{ needs.resolve.outputs.files }}"
