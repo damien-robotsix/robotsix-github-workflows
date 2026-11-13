@@ -1191,6 +1191,67 @@ Results land in the Security tab only.  The public Scorecard badge needs
 callers — repos that want the badge copy this repo's standalone
 [`self-scorecard.yml`](../.github/workflows/self-scorecard.yml) instead.
 
+## `semgrep.yml`
+
+| Input | Type | Default | Description |
+|---|---|---|---|
+| `config` | string | `p/default` | Space-separated rulesets expanded into repeated `--config` flags (registry packs such as `p/default`, `p/python`, or repo-relative rule files). A repo-local `.semgrep.yml` / `.semgrep.yaml` / `.semgrep/` is always added on top when present. |
+| `severity` | string | `ERROR` | Space-separated severities expanded into repeated `--severity` flags; the job fails (`--error`) on any finding at these levels. |
+| `paths` | string | `.` | Space-separated repo-relative scan targets. |
+| `exclude` | string | `""` | Space-separated path globs expanded into repeated `--exclude` flags. |
+| `diff-scan` | boolean | `false` | On `pull_request` events, report only findings introduced relative to the PR base (`--baseline-commit`). Other events always run a full scan. |
+| `semgrep-version` | string | `1.91.0` | Exact `semgrep` PyPI version installed with pip. |
+| `check-nosemgrep-ids` | boolean | `true` | Fail when a suppression comment does not name a rule id (`scripts/check_nosemgrep_rule_ids.py`). |
+| `runs-on` | string | `ubuntu-latest` | Runner label. |
+
+No secrets (caller needs only `contents: read`).
+
+Runs `semgrep scan --error --severity <severity>` and uploads the SARIF
+results as the `semgrep-sarif` workflow artifact — not to Code Scanning, so
+no `security-events: write` permission is needed.  Metrics are disabled
+(`--metrics off`).
+
+### Caller template
+
+Semgrep is the fleet SAST standard (robotsix-standards
+`docs/security-posture.md`).  Consumer repos add a wrapper workflow (e.g.
+`.github/workflows/semgrep.yml`) that runs on every PR and every push to
+`main`, and mark its `Semgrep / Semgrep` check as a required status check:
+
+```yaml
+name: Semgrep
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  semgrep:
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/semgrep.yml@<sha-of-vX.Y.Z> # vX.Y.Z
+    # All inputs are optional — defaults shown:
+    # with:
+    #   config: "p/default"          # add language packs, e.g. "p/default p/python"
+    #   severity: "ERROR"
+    #   paths: "."
+    #   exclude: ""                  # e.g. "tests/fixtures"
+    #   diff-scan: false             # true = PR findings relative to the base commit only
+    #   semgrep-version: "1.91.0"
+    #   check-nosemgrep-ids: true
+    #   runs-on: "ubuntu-latest"
+```
+
+The workflow needs only `contents: read`: findings are uploaded as the
+`semgrep-sarif` artifact, not to the GitHub Security tab.  A repo-local
+`.semgrep.yml` (or `.semgrep/` directory) is added to the configured rulesets
+automatically.
+
+**Suppressions must name a rule id.**  Write `nosemgrep: <rule-id>` after a
+comment marker on the offending line (e.g. a Python `#` comment followed by
+`nosemgrep: python.lang.security.audit.eval-detected.eval-detected`).  A bare
+marker without a rule id silences every rule on the line and fails the
+`check-nosemgrep-ids` step.
+
 ## `scan-container.yml`
 
 | Input | Type | Default | Description |
