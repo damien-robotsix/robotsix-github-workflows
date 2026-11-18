@@ -12,25 +12,6 @@ on:
         required: false
         type: boolean
         default: false
-      has-board:
-        description: >
-          Set true when the caller repo uses the robotsix board (docs/modules.yaml).
-          Enables the modules-drift job which validates module registration and
-          path consistency via robotsix-modules.
-        required: false
-        type: boolean
-        default: false
-      python-version:
-        description: Python version for the modules-drift job.
-        required: false
-        type: string
-        default: "3.14"
-      uv-version:
-        description: uv version for the modules-drift job.
-        required: false
-        type: string
-        default: "0.12.5"
-
 permissions:
   contents: read
 
@@ -202,38 +183,3 @@ jobs:
       # per the standard — no warning-first window.  Stdlib-only script.
       - name: Check SECURITY.md
         run: python3 _workflow-lib/scripts/check_security_md.py --root .
-
-  # Modules-drift gate: validates docs/modules.yaml registration and path
-  # consistency.  Only runs when the caller opts in with has-board: true,
-  # since it requires Python, uv, and robotsix-modules to be available.
-  modules:
-    name: Modules drift
-    if: ${{ inputs.has-board }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
-        with:
-          python-version: ${{ inputs.python-version }}
-
-      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e  # v10.3.2
-        with:
-          version: ${{ inputs.uv-version }}
-
-      - name: Sync dependencies
-        run: uv sync --frozen
-
-      - name: Validate modules.yaml
-        run: uv run --frozen robotsix-modules validate docs/modules.yaml
-
-      - name: Check module registration
-        run: uv run --frozen robotsix-modules check-registration docs/modules.yaml --root .
-
-      - name: Validate module paths
-        run: uv run --frozen robotsix-modules validate-paths docs/modules.yaml --root .

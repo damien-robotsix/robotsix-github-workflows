@@ -1,0 +1,54 @@
+# Module-taxonomy gate, split out of baseline-check.yml so consumers that
+# only want the docs/modules.yaml drift checks can run them without the
+# AGENT.md / README / LICENSE / dependabot baseline scaffolding of the
+# baseline job.
+name: Modules Drift
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: Python version for the modules-drift job.
+        required: false
+        type: string
+        default: "3.14"
+      uv-version:
+        description: uv version for the modules-drift job.
+        required: false
+        type: string
+        default: "0.12.5"
+
+permissions:
+  contents: read
+
+jobs:
+  modules-drift:
+    name: Modules drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e  # v10.3.2
+        with:
+          version: ${{ inputs.uv-version }}
+
+      - name: Sync dependencies
+        run: uv sync --frozen
+
+      - name: Validate modules.yaml
+        run: uv run --frozen robotsix-modules validate docs/modules.yaml
+
+      - name: Check module registration
+        run: uv run --frozen robotsix-modules check-registration docs/modules.yaml --root .
+
+      - name: Validate module paths
+        run: uv run --frozen robotsix-modules validate-paths docs/modules.yaml --root .

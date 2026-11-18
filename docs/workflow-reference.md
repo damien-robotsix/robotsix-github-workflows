@@ -68,9 +68,6 @@ release commit reachable.
 | Input | Type | Default | Description |
 |---|---|---|---|
 | `has-docker` | boolean | `false` | Require `package-ecosystem: docker` in dependabot.yml. |
-| `has-board` | boolean | `false` | Enable modules-drift job (robotsix board). |
-| `python-version` | string | `3.14` | Python version for the modules-drift job. |
-| `uv-version` | string | `0.8.15` | uv version for the modules-drift job. |
 
 ### Caller template
 
@@ -94,10 +91,6 @@ jobs:
       # in dependabot.yml.  Auto-detection also fires when a Dockerfile
       # exists at the repo root.
       has-docker: false
-
-      # Set true when this repo uses the robotsix board (docs/modules.yaml).
-      # Enables the modules-drift job which validates module registration.
-      has-board: false
 ```
 
 **Consumer prerequisites:**
@@ -109,6 +102,41 @@ jobs:
 - `release-please-config.json` at the repo root.
 - `.secrets-patterns-excluded` at the repo root: one regular expression per line (not gitignore globs; blank lines and `#` comments allowed), and no detect-secrets `--exclude-files .secrets-patterns-excluded` wiring in `.pre-commit-config.yaml` (see robotsix-standards `docs/secret-files-are-never-tracked.md`). Warning-first: reported as `::warning::` until 2027-01-31, failing from then.
 - `SECURITY.md` at the repo root carrying the three elements required by robotsix-standards `docs/repo-baseline.md`, detected by case-insensitive heuristics: a reporting contact (an email address, an `http(s)://` URL, or a GitHub security-advisory / private-vulnerability-reporting reference), a response-time expectation (a number with a time unit such as `48 hours` or `5 business days`, or an explicit `best-effort` statement), and a coordinated-disclosure statement (`coordinated disclosure` or `responsible disclosure`). Fail-closed: a missing file or element fails the job.
+
+## `modules-drift.yml`
+
+| Input | Type | Default | Description |
+|---|---|---|---|
+| `python-version` | string | `3.14` | Python version for the modules-drift job. |
+| `uv-version` | string | `0.12.5` | uv version for the modules-drift job. |
+
+### Caller template
+
+Module-taxonomy gate split out of `baseline-check.yml`: validates
+`docs/modules.yaml` registration and path consistency via `robotsix-modules`
+(`validate`, `check-registration`, `validate-paths`).  Standalone so a
+consumer that only wants the module gate does not pull in the AGENT.md /
+pre-commit baseline scaffolding of the `baseline` job.  Consumers add a
+wrapper workflow (e.g. `.github/workflows/modules-drift.yml`) that triggers
+on `push`/`pull_request` targeting `main`:
+
+```yaml
+name: Modules Drift
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  modules-drift:
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/modules-drift.yml@<sha-of-vX.Y.Z> # vX.Y.Z
+```
+
+**Consumer prerequisites:**
+
+- `docs/modules.yaml` at the repo root describing the module taxonomy.
+- `robotsix-modules` resolvable by `uv run --frozen` (declared in the caller's project, e.g. as a dev/CI dependency) and a valid `uv.lock`.
 
 ## `bump.yml`
 
