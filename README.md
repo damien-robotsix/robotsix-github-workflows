@@ -43,6 +43,7 @@ template, inputs, defaults and secrets.
 | [`dependabot-auto-merge.yml`](docs/workflow-reference.md#dependabot-auto-mergeyml) | auto-merge Dependabot PRs (protected & unprotected branch handling) |
 | [`baseline-check.yml`](docs/workflow-reference.md#baseline-checkyml) | enforce repo baseline rules: AGENT.md, README.md and LICENSE (MIT), `.github/dependabot.yml` ecosystems, `release-please-config.json`, `.secrets-patterns-excluded` (warning-first until 2027-01-31), plus the opt-in modules-drift gate |
 | [`codeql.yml`](docs/workflow-reference.md#codeqlyml) | CodeQL static analysis |
+| [`semgrep.yml`](docs/workflow-reference.md#semgrepyml) | fleet SAST gate: Semgrep scan failing on `ERROR` findings, SARIF uploaded as a workflow artifact (`contents: read` only), plus a rule-id check on suppression comments |
 | [`scorecard.yml`](docs/workflow-reference.md#scorecardyml) | OpenSSF Scorecard supply-chain posture analysis (SARIF to Code Scanning) |
 | [`dependency-review.yml`](docs/workflow-reference.md#dependency-reviewyml) | PR gate: dependency-review-action vulnerability-severity + license policy check |
 | [`config-ownership-check.yml`](docs/workflow-reference.md#config-ownership-checkyml) | PR gate: prevents deploy-plane config from leaking component-internal settings |
