@@ -32,6 +32,7 @@ template, inputs, defaults and secrets.
 |---|---|
 | [`python-ci.yml`](docs/workflow-reference.md#python-ciyml) | lint/format/type/test gate for Python packages |
 | [`python-security.yml`](docs/workflow-reference.md#python-securityyml) | bandit / pip-audit / trufflehog security scan |
+| [`secret-scan.yml`](docs/workflow-reference.md#secret-scanyml) | language-agnostic TruffleHog secret scan (no uv / `uv.lock` required) |
 | [`python-docs.yml`](docs/workflow-reference.md#python-docsyml) | mkdocs build/deploy |
 | [`auto-release.yml`](docs/workflow-reference.md#auto-releaseyml) | scheduled towncrier-driven `0.x` tag-cutting release workflow (deprecated — use `release-please.yml`) |
 | [`release-please.yml`](docs/workflow-reference.md#release-pleaseyml) | conventional-commits release automation (replaces deprecated `auto-release.yml`) |
