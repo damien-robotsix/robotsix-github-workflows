@@ -79,6 +79,14 @@ on:
         required: false
         type: string
         default: "write"
+      timeout-minutes:
+        description: >
+          Job timeout. Large monorepos / slow uv resolution can exceed the
+          15-minute default; raise it for callers whose dependency set
+          legitimately takes longer to resolve and pin.
+        required: false
+        type: number
+        default: 15
     secrets:
       app-private-key:
         description: >
@@ -93,7 +101,7 @@ jobs:
   bump:
     name: Bump
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     permissions:
       contents: write       # push bump branch
       pull-requests: write  # gh pr create

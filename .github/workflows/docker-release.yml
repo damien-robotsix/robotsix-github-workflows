@@ -121,6 +121,15 @@ on:
         required: false
         type: number
         default: 3
+      timeout-minutes:
+        description: >
+          Job timeout. Defaults to 20 minutes (above the 15-minute fleet
+          default) because large base-layer pulls, the multi-arch build and
+          the Trivy scan routinely exceed 15 minutes. Raise it for callers
+          whose images/heavier base layers legitimately take longer.
+        required: false
+        type: number
+        default: 20
     secrets:
       build-secrets:
         description: >
@@ -137,7 +146,7 @@ jobs:
     runs-on: ${{ inputs.runs-on }}
     # 20 min (above the 15-min fleet default): large base-layer pulls,
     # multi-arch build and the Trivy scan routinely exceed 15 minutes.
-    timeout-minutes: 20
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     env:
       # Resolved once so the metadata, by-digest push and hardening base ref
       # all agree. Cannot be a workflow_call input default (Rule 5: dynamic
