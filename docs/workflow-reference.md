@@ -891,13 +891,14 @@ the version bump — turn it off for repos with no `uv.lock`.
 | `pre-test-command` | string | `""` | Shell snippet run (bash `eval`, `UV_PROJECT_ENVIRONMENT=system`) after `uv sync --frozen` and before lint/type/test in the job that runs pytest (`tests`, or `test` when `job_split`), e.g. `uv run playwright install --with-deps chromium`. Empty → step skipped. |
 | `extra-check-command` | string | `""` | Repo-specific check (bash `eval`) run after Ruff in `tests` (or `lint` when `job_split`), e.g. a config-schema drift check; non-zero exit fails the job. Empty → step skipped. |
 
-> **Pin requirement for `pre-test-command` / `extra-check-command`:** neither input is
-> declared by any released tag — the `v1.5.0` tag's `inputs:` block ends at
-> `job_split`. Passing an undeclared input to a reusable causes a fatal
-> `startup_failure` ("Unexpected input(s) ...") that kills the PR CI gate and any
-> dependent publish job. Consumers that use either input MUST pin the
-> **default-branch SHA** (the moving `main` head) in their `uses:` line, **not** a
-> released tag — see `@<sha-of-default-branch>` in the caller template below.
+> **Pin requirement for inputs newer than the `v1.5.0` tag:** `test-timeout-minutes`,
+> `pre-test-command` and `extra-check-command` are not declared by any released
+> tag — the `v1.5.0` tag's `inputs:` block ends at `job_split`. Passing an
+> undeclared input to a reusable causes a fatal `startup_failure` ("Unexpected
+> input(s) ...") that kills the PR CI gate and any dependent publish job.
+> Consumers that use any of these inputs MUST pin the **default-branch SHA** (the
+> moving `main` head) in their `uses:` line, **not** a released tag — see
+> `@<sha-of-default-branch>` in the caller template below.
 
 Every job in `python-ci.yml` declares `timeout-minutes`, because callers cannot set
 it on a `uses:` job. Ceilings are 15 minutes for `tests` and `test`
@@ -942,8 +943,6 @@ jobs:
     #   pytest-args: '-m "not docker"'            # default
     #   pytest-numprocesses: "auto"               # default
     #   runs-on: "ubuntu-latest"                  # default
-    #   test-timeout-minutes: 15                  # default — job timeout for the tests/test jobs
-    #     # (fleet default 15). Raise only for slow suites; every other job has a fixed ceiling.
     #   run-deptry: true                          # default
     #   run-audit: true                           # default
     #   run-bandit: true                          # default
@@ -988,6 +987,8 @@ jobs:
     permissions:
       contents: read
     with:
+      # test-timeout-minutes: 30                  # default-branch only — absent from released tags,
+      #     # so it MUST NOT be uncommented on a `@<sha-of-vX.Y.Z>` pin (startup_failure).
       pre-test-command: uv run playwright install --with-deps chromium
       extra-check-command: uv run python scripts/check_config_schema.py
 ```
