@@ -983,7 +983,7 @@ SHA:
 ```yaml
 jobs:
   tests:
-    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/python-ci.yml@<sha-of-default-branch>
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/python-ci.yml@<sha-of-default-branch>  # vX.Y.Z
     permissions:
       contents: read
     with:
