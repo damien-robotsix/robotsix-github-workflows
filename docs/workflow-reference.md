@@ -900,6 +900,14 @@ the version bump — turn it off for repos with no `uv.lock`.
 | `pre-test-command` | string | `""` | Shell snippet run (bash `eval`, `UV_PROJECT_ENVIRONMENT=system`) after `uv sync --frozen` and before lint/type/test in the job that runs pytest (`tests`, or `test` when `job_split`), e.g. `uv run playwright install --with-deps chromium`. Empty → step skipped. |
 | `extra-check-command` | string | `""` | Repo-specific check (bash `eval`) run after Ruff in `tests` (or `lint` when `job_split`), e.g. a config-schema drift check; non-zero exit fails the job. Empty → step skipped. |
 
+> **Pin requirement for `pre-test-command` / `extra-check-command`:** neither input is
+> declared by any released tag — the `v1.5.0` tag's `inputs:` block ends at
+> `job_split`. Passing an undeclared input to a reusable causes a fatal
+> `startup_failure` ("Unexpected input(s) ...") that kills the PR CI gate and any
+> dependent publish job. Consumers that use either input MUST pin the
+> **default-branch SHA** (the moving `main` head) in their `uses:` line, **not** a
+> released tag — see `@<sha-of-default-branch>` in the caller template below.
+
 Every job in `python-ci.yml` declares `timeout-minutes`, because callers cannot set
 it on a `uses:` job. Ceilings are 15 minutes for `tests` and `test`
 (`test-timeout-minutes`), 5 for `lint` and `vulture`, 10 for `typecheck` and
@@ -977,12 +985,15 @@ jobs:
 ```
 
 Repos whose tests need extra runtime setup (e.g. Playwright browsers) or a
-repo-specific gate can still adopt the shared workflow:
+repo-specific gate can still adopt the shared workflow. Because
+`pre-test-command` / `extra-check-command` are not declared by any released
+tag (see the pin-requirement note above), these callers pin the default-branch
+SHA:
 
 ```yaml
 jobs:
   tests:
-    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/python-ci.yml@<sha-of-vX.Y.Z> # vX.Y.Z
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/python-ci.yml@<sha-of-default-branch>  # vX.Y.Z
     permissions:
       contents: read
     with:
