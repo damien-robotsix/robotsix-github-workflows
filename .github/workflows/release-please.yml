@@ -100,7 +100,7 @@ jobs:
       contents: write       # create the release commit, tag and GitHub Release
       pull-requests: write  # open and update the release PR
     steps:
-      - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2  # v2.22.2
+      - uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c  # v2.23.0
         if: inputs.harden-runner
         with:
           egress-policy: audit
