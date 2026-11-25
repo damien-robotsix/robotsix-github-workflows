@@ -41,7 +41,7 @@ template, inputs, defaults and secrets.
 | [`deps-bump.yml`](docs/workflow-reference.md#deps-bumpyml) | scheduled `uv lock --upgrade` PR |
 | [`bump.yml`](docs/workflow-reference.md#bumpyml) | shared bump engine behind the `deps-bump.yml` / `pin-bump.yml` wrappers (`bump-mode: deps|pins`) |
 | [`dependabot-auto-merge.yml`](docs/workflow-reference.md#dependabot-auto-mergeyml) | auto-merge Dependabot PRs (protected & unprotected branch handling) |
-| [`baseline-check.yml`](docs/workflow-reference.md#baseline-checkyml) | enforce repo baseline rules: AGENT.md, README.md and LICENSE (MIT), `.github/dependabot.yml` ecosystems, `release-please-config.json`, `.secrets-patterns-excluded` (warning-first until 2027-01-31), plus the opt-in modules-drift gate |
+| [`baseline-check.yml`](docs/workflow-reference.md#baseline-checkyml) | enforce repo baseline rules: AGENT.md, README.md and LICENSE (MIT), `.github/dependabot.yml` ecosystems, `release-please-config.json`, `.secrets-patterns-excluded` (warning-first until 2027-01-31), `SECURITY.md` (fail-closed), plus the opt-in modules-drift gate |
 | [`codeql.yml`](docs/workflow-reference.md#codeqlyml) | CodeQL static analysis |
 | [`scorecard.yml`](docs/workflow-reference.md#scorecardyml) | OpenSSF Scorecard supply-chain posture analysis (SARIF to Code Scanning) |
 | [`dependency-review.yml`](docs/workflow-reference.md#dependency-reviewyml) | PR gate: dependency-review-action vulnerability-severity + license policy check |
