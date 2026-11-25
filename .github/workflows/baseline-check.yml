@@ -196,6 +196,13 @@ jobs:
       - name: Check .secrets-patterns-excluded
         run: python3 _workflow-lib/scripts/check_secrets_patterns_excluded.py --root .
 
+      # robotsix-standards docs/repo-baseline.md mandates a root SECURITY.md
+      # with a reporting contact, a response-time expectation and a
+      # coordinated-disclosure statement.  Fail-closed (::error::, exit 1)
+      # per the standard — no warning-first window.  Stdlib-only script.
+      - name: Check SECURITY.md
+        run: python3 _workflow-lib/scripts/check_security_md.py --root .
+
   # Modules-drift gate: validates docs/modules.yaml registration and path
   # consistency.  Only runs when the caller opts in with has-board: true,
   # since it requires Python, uv, and robotsix-modules to be available.

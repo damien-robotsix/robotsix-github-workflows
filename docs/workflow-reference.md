@@ -108,6 +108,7 @@ jobs:
 - `.github/dependabot.yml` covering at minimum `uv`, `github-actions`, and `pre-commit` ecosystems (plus `docker` when `has-docker: true` or a root `Dockerfile` exists, plus `npm` when `package.json` exists).
 - `release-please-config.json` at the repo root.
 - `.secrets-patterns-excluded` at the repo root: one regular expression per line (not gitignore globs; blank lines and `#` comments allowed), and no detect-secrets `--exclude-files .secrets-patterns-excluded` wiring in `.pre-commit-config.yaml` (see robotsix-standards `docs/secret-files-are-never-tracked.md`). Warning-first: reported as `::warning::` until 2027-01-31, failing from then.
+- `SECURITY.md` at the repo root carrying the three elements required by robotsix-standards `docs/repo-baseline.md`, detected by case-insensitive heuristics: a reporting contact (an email address, an `http(s)://` URL, or a GitHub security-advisory / private-vulnerability-reporting reference), a response-time expectation (a number with a time unit such as `48 hours` or `5 business days`, or an explicit `best-effort` statement), and a coordinated-disclosure statement (`coordinated disclosure` or `responsible disclosure`). Fail-closed: a missing file or element fails the job.
 
 ## `bump.yml`
 
