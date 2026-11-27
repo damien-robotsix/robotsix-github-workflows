@@ -59,12 +59,17 @@ on:
 # grant whether or not the job's `if:` is true).
 
 jobs:
-  hadolint:
-    name: Hadolint
+  resolve:
+    # Expands `dockerfiles` once; both hadolint jobs consume its outputs so
+    # the gate and the SARIF upload always lint the same file set.
+    name: Resolve Dockerfiles
     runs-on: ${{ inputs.runs-on }}
-    timeout-minutes: 15
+    timeout-minutes: 5
     permissions:
       contents: read
+    outputs:
+      found: ${{ steps.resolve.outputs.found }}
+      files: ${{ steps.resolve.outputs.files }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
         with:
@@ -93,11 +98,23 @@ jobs:
             echo "files=${files[*]}" >> "$GITHUB_OUTPUT"
           fi
 
+  hadolint:
+    name: Hadolint
+    needs: resolve
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          persist-credentials: false
+
       - name: Run hadolint
-        if: ${{ steps.resolve.outputs.found == 'true' }}
+        if: ${{ needs.resolve.outputs.found == 'true' }}
         uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387  # v3.5.0
         with:
-          dockerfile: ${{ steps.resolve.outputs.files }}
+          dockerfile: ${{ needs.resolve.outputs.files }}
           failure-threshold: ${{ inputs.failure-threshold }}
           config: ${{ inputs.config }}
 
@@ -112,6 +129,7 @@ jobs:
     # workflow-level comment above).
     if: ${{ inputs.upload-sarif }}
     name: Hadolint (SARIF)
+    needs: resolve
     runs-on: ${{ inputs.runs-on }}
     timeout-minutes: 15
     steps:
@@ -119,34 +137,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Resolve Dockerfiles
-        id: resolve
-        env:
-          DOCKERFILES: ${{ inputs.dockerfiles }}
-        run: |
-          shopt -s nullglob globstar
-          files=()
-          # Word-splitting and glob expansion of $DOCKERFILES is intentional.
-          # shellcheck disable=SC2086
-          for f in $DOCKERFILES; do
-            if [ -f "$f" ]; then
-              files+=("$f")
-            fi
-          done
-          if [ "${#files[@]}" -eq 0 ]; then
-            echo "::notice::No Dockerfile matched '${DOCKERFILES}'; skipping hadolint."
-            echo "found=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "Linting: ${files[*]}"
-            echo "found=true" >> "$GITHUB_OUTPUT"
-            echo "files=${files[*]}" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Run hadolint (SARIF)
-        if: ${{ steps.resolve.outputs.found == 'true' }}
+        if: ${{ needs.resolve.outputs.found == 'true' }}
         uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387  # v3.5.0
         with:
-          dockerfile: ${{ steps.resolve.outputs.files }}
+          dockerfile: ${{ needs.resolve.outputs.files }}
           failure-threshold: ${{ inputs.failure-threshold }}
           config: ${{ inputs.config }}
           format: sarif
