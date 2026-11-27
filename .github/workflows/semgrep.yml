@@ -1,0 +1,129 @@
+name: Semgrep
+
+on:
+  workflow_call:
+    inputs:
+      config:
+        description: Space-separated Semgrep rulesets expanded into repeated --config flags (registry packs such as p/default or p/python, or repo-relative rule files). A repo-local .semgrep.yml (or .semgrep/ directory) is always added on top when present.
+        required: false
+        type: string
+        default: "p/default"
+      severity:
+        description: Space-separated severities expanded into repeated --severity flags; the job fails on any finding at these levels.
+        required: false
+        type: string
+        default: "ERROR"
+      paths:
+        description: Space-separated repo-relative scan targets.
+        required: false
+        type: string
+        default: "."
+      exclude:
+        description: Space-separated path globs expanded into repeated --exclude flags.
+        required: false
+        type: string
+        default: ""
+      diff-scan:
+        description: On pull_request events, report only findings introduced relative to the PR base (--baseline-commit). Other events always run a full scan.
+        required: false
+        type: boolean
+        default: false
+      semgrep-version:
+        description: Exact semgrep PyPI version installed with pip.
+        required: false
+        type: string
+        default: "1.91.0"
+      check-nosemgrep-ids:
+        description: Fail when a nosemgrep suppression comment does not name a rule id (scripts/check_nosemgrep_rule_ids.py).
+        required: false
+        type: boolean
+        default: true
+      runs-on:
+        description: Runner label for the scan job.
+        required: false
+        type: string
+        default: "ubuntu-latest"
+
+permissions:
+  contents: read
+
+jobs:
+  semgrep:
+    name: Semgrep
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          # --baseline-commit needs the PR base commit in local history.
+          fetch-depth: ${{ inputs.diff-scan && github.event_name == 'pull_request' && '0' || '1' }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install semgrep
+        env:
+          SEMGREP_VERSION: ${{ inputs.semgrep-version }}
+        run: python3 -m pip install --quiet "semgrep==${SEMGREP_VERSION}"
+
+      - name: Semgrep scan
+        # Inputs flow through env, never inline into the run block, to
+        # avoid template injection (zizmor).  Results go to a SARIF
+        # artifact, not code scanning, so callers need only contents: read.
+        env:
+          SEMGREP_CONFIG: ${{ inputs.config }}
+          SEMGREP_SEVERITY: ${{ inputs.severity }}
+          SEMGREP_PATHS: ${{ inputs.paths }}
+          SEMGREP_EXCLUDE: ${{ inputs.exclude }}
+          DIFF_SCAN: ${{ inputs.diff-scan && github.event_name == 'pull_request' }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          SEMGREP_SEND_METRICS: "off"
+        run: |
+          args=()
+          for c in $SEMGREP_CONFIG; do
+            args+=(--config "$c")
+          done
+          for local_cfg in .semgrep.yml .semgrep.yaml .semgrep; do
+            if [ -e "$local_cfg" ]; then
+              args+=(--config "$local_cfg")
+            fi
+          done
+          for s in $SEMGREP_SEVERITY; do
+            args+=(--severity "$s")
+          done
+          for e in $SEMGREP_EXCLUDE; do
+            args+=(--exclude "$e")
+          done
+          if [ "$DIFF_SCAN" = "true" ] && [ -n "$BASE_SHA" ]; then
+            args+=(--baseline-commit "$BASE_SHA")
+          fi
+          # shellcheck disable=SC2086
+          semgrep scan --error --metrics off "${args[@]}" \
+            --sarif --output semgrep.sarif $SEMGREP_PATHS
+
+      - name: Upload Semgrep SARIF artifact
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: semgrep-sarif
+          path: semgrep.sarif
+          if-no-files-found: warn
+
+      - name: Checkout workflow library (nosemgrep checker)
+        if: ${{ !cancelled() && inputs.check-nosemgrep-ids }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          repository: damien-robotsix/robotsix-github-workflows
+          ref: ${{ github.job_workflow_sha }}
+          path: _workflow-lib
+          persist-credentials: false
+
+      - name: Check nosemgrep comments name a rule id
+        if: ${{ !cancelled() && inputs.check-nosemgrep-ids }}
+        run: |
+          trap 'rm -rf _workflow-lib' EXIT
+          python3 _workflow-lib/scripts/check_nosemgrep_rule_ids.py --root .
