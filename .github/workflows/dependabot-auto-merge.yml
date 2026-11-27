@@ -27,6 +27,16 @@ on:
         required: false
         type: string
         default: ""
+      timeout-minutes:
+        description: >
+          Job timeout. The auto-merge run is bounded by how long the PR's
+          own CI checks take (`gh pr checks --watch --fail-fast`), which is
+          entirely caller-controlled and variable. Raise this if a caller's
+          CI regularly exceeds the 30-minute default, otherwise the job
+          times out mid-watch and leaves the PR un-merged.
+        required: false
+        type: number
+        default: 30
     secrets:
       app-private-key:
         description: PEM private key of the GitHub App named by the app-id input.
@@ -45,7 +55,7 @@ jobs:
     # pull_request_target or the secret arrives empty. This job never
     # checks out PR head code, so the elevated context is safe.
     if: (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && (github.event.pull_request.user.login == 'dependabot[bot]' || github.event.pull_request.user.login == 'renovate[bot]' || github.event.pull_request.user.login == 'robotsix-mill[bot]')
-    timeout-minutes: 30
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     permissions:
       contents: write        # auto-merge via gh pr merge
       pull-requests: write   # label PR + gh pr merge

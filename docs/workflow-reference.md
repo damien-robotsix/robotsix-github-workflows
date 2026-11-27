@@ -122,6 +122,7 @@ jobs:
 | `app-id` | string | — | GitHub App ID for PR creation. Required. |
 | `permission-contents` | string | `write` | Minted token's repo contents scope (push bump branch). |
 | `permission-pull-requests` | string | `write` | Minted token's PR scope (create/update PRs). |
+| `timeout-minutes` | number | `15` | Job timeout; raise it for large monorepos / slow uv resolution that can exceed the default. |
 
 | Secret | Required | Description |
 |---|---|---|
@@ -154,6 +155,7 @@ jobs:
     #   bump-branch: "deps-bump/first-party"
     #   permission-contents: "write"
     #   permission-pull-requests: "write"
+    #   timeout-minutes: 15
     secrets:
       app-private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}  # GitHub App private key
 ```
@@ -278,6 +280,7 @@ jobs:
 | Input | Type | Default | Description |
 |---|---|---|---|
 | `runs-on` | string | `ubuntu-latest` | Runner label for every job; `self-hosted` for a private repo without GitHub-hosted minutes. |
+| `timeout-minutes` | number | `30` | Job timeout; bounded by how long the PR's own CI checks take (`gh pr checks --watch --fail-fast`). Raise it if a caller's CI regularly exceeds 30 minutes. |
 
 The App-token inputs (`app-id`, secret `app-private-key`) are documented in the workflow file.
 
@@ -295,9 +298,14 @@ on:
 jobs:
   auto-merge:
     uses: damien-robotsix/robotsix-github-workflows/.github/workflows/dependabot-auto-merge.yml@<sha-of-vX.Y.Z> # vX.Y.Z
+    # Optional inputs — defaults shown:
+    #   timeout-minutes: 30
 ```
 
-The workflow declares no inputs and no secrets.  The calling job needs
+The workflow declares no required inputs and no required secrets — the
+optional `app-id` / `app-private-key` App-token pair is documented in the
+workflow file, and `timeout-minutes` (default `30`) can be overridden via
+`with:`.  The calling job needs
 `contents: write` and `pull-requests: write` permissions, which the reusable
 workflow requests on the `auto-merge` job.  It auto-merges PRs from
 Dependabot, Renovate, and robotsix-mill bot actors, labels them
@@ -469,6 +477,7 @@ false positives; it is skipped when the file does not exist.
 | `build-args` | string | `""` | Newline-separated `NAME=value` build args for the component Dockerfile build. Not for secrets (recorded in image history). |
 | `github-token-secret-id` | string | `""` | When set, exposes the job's `GITHUB_TOKEN` to the component Dockerfile build as a BuildKit secret with this id (`RUN --mount=type=secret,id=<id>`). |
 | `push-retries` | number | `3` | Extra attempts for the component base push-by-digest (Stage 1, only when its first push fails) and the hardened-image build+push (Stage 2) when they fail (e.g. GHCR's intermittent `unknown blob`), with a short back-off; already-uploaded blobs are reused. Must be 0–10; larger values are rejected. Retries stay inside the push steps, so the Trivy gate and attestations run once. `0` = single attempt. |
+| `timeout-minutes` | number | `20` | Job timeout; 20 minutes by default (above the 15-min fleet default) for large base-layer pulls, the multi-arch build and the Trivy scan. Raise it for heavier images. |
 
 | Secret | Required | Description |
 |---|---|---|
@@ -502,6 +511,7 @@ jobs:
     #     PYTHON_VERSION=3.14
     #   github-token-secret-id: github_token  # RUN --mount=type=secret,id=github_token
     #   push-retries: 3                     # default; extra push attempts on GHCR `unknown blob` (0-10), 0 = single attempt
+    #   timeout-minutes: 20                 # default; raise if the build+scan exceeds 20 min
     secrets: inherit
     # Or, to pass extra BuildKit secrets (replaces `secrets: inherit`):
     # secrets:
@@ -514,10 +524,10 @@ The `packages: write`, `id-token: write`, `attestations: write`, and `security-e
 Both the component base push-by-digest (Stage 1, retried only when its first push fails) and the hardened-image push (Stage 2) are retried up to `push-retries` extra times (default `3`, must be 0–10) with a short back-off, because GHCR intermittently fails a push mid-stream with `unknown blob`. The retry loops live inside the push steps, so the Trivy gate, smoke test and provenance/SBOM attestations run once, against the image that was actually published.
 
 Every job in the reusable workflows declares `timeout-minutes` (fleet default 15).
-The `publish` job in `docker-release.yml` is the exception at 20 minutes, because
-large base-layer pulls, the multi-arch build and the Trivy scan can exceed 15 minutes.
-Callers cannot override a `uses:` job's timeout, so raise the ceiling in the
-reusable workflow itself, not in the caller.
+The `publish` job in `docker-release.yml` defaults to 20 minutes, because large
+base-layer pulls, the multi-arch build and the Trivy scan can exceed 15 minutes.
+Callers can tune the ceiling with the `timeout-minutes` `workflow_call` input —
+no need to fork the shared workflow for a longer timeout.
 
 ## `lint-workflows.yml`
 
@@ -1210,6 +1220,7 @@ callers — repos that want the badge copy this repo's standalone
 |---|---|---|---|
 | `image-name` | string | `""` | Full image ref to scan (e.g. `ghcr.io/<owner>/<repo>:main`). When empty, falls back to `ghcr.io/$GITHUB_REPOSITORY:main` at runtime. |
 | `ignore-unfixed` | boolean | `false` | Skip CVEs with no upstream fix. Defaults to false so all findings surface in the Security tab. |
+| `timeout-minutes` | number | `15` | Job timeout; raise it if scanning a large image regularly exceeds the default. |
 
 No secrets (caller needs `security-events: write` and `contents: read`).
 
@@ -1241,6 +1252,7 @@ jobs:
     uses: damien-robotsix/robotsix-github-workflows/.github/workflows/scan-container.yml@<sha-of-vX.Y.Z> # vX.Y.Z
     # with:
     #   image-name: "ghcr.io/<owner>/<repo>:main"  # default: ghcr.io/$GITHUB_REPOSITORY:main
+    #   timeout-minutes: 15  # default; raise if scanning a large image exceeds it
     permissions:
       security-events: write
       contents: read
