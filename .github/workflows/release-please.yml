@@ -125,12 +125,12 @@ jobs:
 
       # Only the lock-sync step below needs these; release-please itself needs
       # neither a checkout nor uv.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
         if: inputs.sync-uv-lock && (steps.release.outputs.prs_created == 'true' || steps.release.outputs.pr != '')
         with:
           persist-credentials: false
 
-      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e  # v7
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e  # v10.3.2
         if: inputs.sync-uv-lock && (steps.release.outputs.prs_created == 'true' || steps.release.outputs.pr != '')
         with:
           # No cache: this job has contents:write, and a poisoned cache in a
